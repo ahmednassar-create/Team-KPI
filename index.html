@@ -175,10 +175,16 @@ td.mono{font-family:var(--mono);font-size:13px}
 <script>
 (function(){
   var START='2026-10-14', TARGET=0.9, ALERT=0.7;
-  var TEAMS=[
+  var TEAMS_BASE=[
     {id:'t1',en:'Sayed team',ar:'تيم سيد'},{id:'t2',en:'Bahagt team',ar:'تيم بهجت'},{id:'t3',en:'Khaled team',ar:'تيم خالد'},
     {id:'tx',en:'Lost & Delivered',ar:'Lost & Delivered'}
   ];
+  var TEAMS=TEAMS_BASE.slice(), teamDocs={}, td={en:'',ar:''};
+  function rebuildTeams(){
+    var add=Object.keys(teamDocs).map(function(id){var x=teamDocs[id];return {id:'c'+id,en:x.en||x.ar||'?',ar:x.ar||x.en||'?',c:x.c||0}}).sort(function(a,b){return a.c-b.c});
+    var base=TEAMS_BASE.slice(); var tx=base.filter(function(t){return t.id==='tx'}); base=base.filter(function(t){return t.id!=='tx'});
+    TEAMS=base.concat(add,tx);
+  }
   var ONLY=null; if(ONLY) TEAMS=TEAMS.filter(function(t){return t.id===ONLY});
   var ROLE={Super:['Super','سوبر'],Senior:['Senior','سنيور'],Coordinator:['Coordinator','كوردنيتور'],Temp:['Temp','تيمب']};
   var TASKS={
@@ -453,6 +459,11 @@ td.mono{font-family:var(--mono);font-size:13px}
       });
       h+='</tbody></table></div>';
     }
+    h+='</section><section class="panel"><header><h2>'+esc(L('Add a team','إضافة تيم'))+'</h2><span class="sub">'+esc(L('Create a new team, then add its members below.','اعمل تيم جديد وبعدين ضيف أعضاءه من تحت.'))+'</span></header>'+
+      '<form class="aform gl" data-tform="1">'+
+      '<label>'+esc(L('Team name in Arabic','اسم التيم بالعربي'))+'<input id="tar" data-tin="ar" dir="rtl" lang="ar" value="'+esc(td.ar)+'"></label>'+
+      '<label>'+esc(L('Team name in English','اسم التيم بالإنجليزي'))+'<input id="ten" data-tin="en" dir="ltr" lang="en" value="'+esc(td.en)+'"></label>'+
+      '<button class="btn" type="submit">'+esc(L('Add team','إضافة التيم'))+'</button></form></section>';
     h+='</section><section class="panel"><header><h2>'+esc(L('Add a team member','إضافة موظف'))+'</h2><span class="sub">'+esc(L('Counts from the start date. Adding a Coordinator to Team 3 replaces the vacant slot.','بيتحسب من تاريخ البداية. إضافة كوردينيتور لتيم 3 بتحل محل الخانة الشاغرة.'))+'</span></header>'+
       '<form class="aform gl" data-pform="1">'+
       '<label>'+esc(L('Name in Arabic','الاسم بالعربي'))+'<input id="par" data-pin="ar" dir="rtl" lang="ar" value="'+esc(pd.ar)+'"></label>'+
@@ -546,6 +557,12 @@ td.mono{font-family:var(--mono);font-size:13px}
     });
   }
 
+  function addTeam(){
+    if(!db||!isAdmin) return;
+    var ar=td.ar.trim(), en=td.en.trim(); if(!ar&&!en) return;
+    td={en:'',ar:''}; render();
+    queue('tnew',function(){return db.collection('teams').add({ar:ar,en:en||ar,c:Date.now()})});
+  }
   function addMember(){
     if(!db||!isAdmin) return;
     var ar=pd.ar.trim(), en=pd.en.trim(); if(!ar&&!en) return;
@@ -647,11 +664,13 @@ td.mono{font-family:var(--mono);font-size:13px}
     var t=e.target; if(t.dataset&&t.dataset.gin){var pid=t.dataset.pid; drafts[pid]=drafts[pid]||{ar:'',en:''}; drafts[pid][t.dataset.gin]=t.value}
     if(t.dataset&&t.dataset.xin){xd[t.dataset.xin]=t.value}
     if(t.dataset&&t.dataset.pin){pd[t.dataset.pin]=t.value}
+    if(t.dataset&&t.dataset.tin){td[t.dataset.tin]=t.value}
   });
   $('view').addEventListener('submit',function(e){
     var f=e.target.closest('form'); if(!f) return;
     if(f.dataset.xform){e.preventDefault();addExtra();return}
     if(f.dataset.pform){e.preventDefault();addMember();return}
+    if(f.dataset.tform){e.preventDefault();addTeam();return}
     if(!f.dataset.gform) return; e.preventDefault();
     var pid=f.dataset.gform, d=drafts[pid]||{ar:'',en:''}, ar=d.ar.trim(), en=d.en.trim();
     if((!ar&&!en)||!db||!canWrite) return;
@@ -702,6 +721,10 @@ td.mono{font-family:var(--mono);font-size:13px}
       db.collection('extra').onSnapshot(function(snap){
         var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
         extras=m; render();
+      },function(){});
+      db.collection('teams').onSnapshot(function(snap){
+        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
+        teamDocs=m; rebuildTeams(); rebuild(); render();
       },function(){});
       db.collection('staff').onSnapshot(function(snap){
         var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
