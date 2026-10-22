@@ -740,7 +740,7 @@ td.mono{font-family:var(--mono);font-size:13px}
       gaps=m; render();
     },function(){}));
     [['extra',function(m){extras=m}],['months',function(m){months=m}],
-     ['teams',function(m){teamDocs=m;rebuildTeams();rebuild()}],['staff',function(m){staff=m;rebuild()}]].forEach(function(c){
+     ['staff',function(m){staff=m;rebuild()}]].forEach(function(c){
       unsubs.push(db.collection(c[0]).onSnapshot(function(snap){
         var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}}); c[1](m); render();
       },function(){}));
@@ -751,8 +751,12 @@ td.mono{font-family:var(--mono);font-size:13px}
       firebase.initializeApp(FBCFG);
       db=firebase.firestore(); fbAuth=firebase.auth();
       dl={save:function(o){return new Promise(function(res){var u=URL.createObjectURL(o.data),a=document.createElement('a');a.href=u;a.download=o.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);res({status:'saved'})})}};
+      db.collection('teams').onSnapshot(function(snap){
+        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
+        teamDocs=m; rebuildTeams(); rebuild(); render();
+      },function(){});
       fbAuth.onAuthStateChanged(function(u){
-        unsub(); store={};gaps={};extras={};months={};staff={};teamDocs={};synced=false; rebuildTeams(); rebuild();
+        unsub(); store={};gaps={};extras={};months={};staff={};synced=false; rebuildTeams(); rebuild();
         if(!u){who=null;isAdmin=false;teamFilter='all';render();return}
         var em=(u.email||'').toLowerCase();
         if(/@team\.kpi$/.test(em)){who={team:em.split('@')[0]};isAdmin=false;teamFilter=who.team;if(tab==='admin'||tab==='reports')tab='dash'}
