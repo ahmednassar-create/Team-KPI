@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Team KPI Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: sticky control bar (date, language, tabs) over one column. Everything is grouped by team: Team 1, Team 2, Team 3, Temp. Each team shows its Super, its scores, then its people. Dashboard = KPI strip + one table per team. Daily check = one card per person with a 3-way control per task. */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --ink:#15212e; --muted:#5d6b7a; --line:#dde3ea;
+  --accent:#0b5ed7; --accent-ink:#ffffff; --accent-soft:#e4eefc;
+  --ok:#1b8a57; --ok-soft:#dcf3e7; --warn:#a56a00; --warn-soft:#fbefd0; --bad:#c0352d; --bad-soft:#fbe1de; --na:#8a96a3; --na-soft:#e8ecf0;
+  --font:'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f161d; --surface:#17212b; --ink:#e7edf3; --muted:#93a1b0; --line:#2a3745;
+  --accent:#5b9cff; --accent-ink:#0a1420; --accent-soft:#1a2c46;
+  --ok:#47c88a; --ok-soft:#14352a; --warn:#e3a93a; --warn-soft:#3a2f12; --bad:#ff7b72; --bad-soft:#3d1d1b; --na:#8795a4; --na-soft:#222d38; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f161d; --surface:#17212b; --ink:#e7edf3; --muted:#93a1b0; --line:#2a3745;
+  --accent:#5b9cff; --accent-ink:#0a1420; --accent-soft:#1a2c46;
+  --ok:#47c88a; --ok-soft:#14352a; --warn:#e3a93a; --warn-soft:#3a2f12; --bad:#ff7b72; --bad-soft:#3d1d1b; --na:#8795a4; --na-soft:#222d38; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;
+  padding-block:0 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-size:22px;line-height:1.2;margin:0;font-weight:700;letter-spacing:-.01em}
+h2{font-size:16px;margin:0;font-weight:700}
+.sub{color:var(--muted);font-size:13px}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 12px;border-bottom:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between}
+.bar .id{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ctrls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px}
+.seg button{font:inherit;font-weight:500;color:var(--muted);background:none;border:0;border-radius:6px;padding:6px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.date{display:inline-flex;align-items:center;gap:6px}
+.date button,.date input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer}
+.date input{font-family:var(--mono);font-size:13px}
+.date button:disabled{opacity:.4;cursor:default}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{background:var(--warn-soft);color:var(--ink);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi .l{color:var(--muted);font-size:12px;font-weight:500}
+.kpi .v{font-family:var(--mono);font-size:30px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi .s{color:var(--muted);font-size:12px}
+.v.ok{color:var(--ok)}.v.warn{color:var(--warn)}.v.bad{color:var(--bad)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.panel>header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:600px;font-variant-numeric:tabular-nums}
+th{font-size:12px;font-weight:600;color:var(--muted);text-align:start;padding:9px 14px;background:var(--bg);white-space:nowrap}
+td{padding:10px 14px;border-top:1px solid var(--line);vertical-align:middle}
+td.n,th.n{text-align:end}
+td.mono{font-family:var(--mono);font-size:13px}
+.who{display:flex;flex-direction:column;min-width:0}
+.who b{font-weight:600}.who span{color:var(--muted);font-size:12px}
+.arn{color:var(--muted);font-weight:400;font-size:12px}
+.meter{display:flex;align-items:center;gap:8px;min-width:130px}
+.meter .t{flex:1;height:8px;border-radius:4px;background:var(--na-soft);overflow:hidden}
+.meter .f{display:block;height:100%;border-radius:4px}
+.meter b{font-family:var(--mono);font-size:13px;min-width:42px;text-align:end;font-weight:600}
+.f.ok{background:var(--ok)}.f.warn{background:var(--warn)}.f.bad{background:var(--bad)}.f.na{background:var(--na)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}.pill.na{background:var(--na-soft);color:var(--na)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:13px;font-weight:500;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.team{display:flex;flex-direction:column;gap:12px}
+.thead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;border-inline-start:5px solid var(--accent)}
+.panel>.thead{border:0;border-bottom:1px solid var(--line);border-radius:0;border-inline-start:5px solid var(--accent)}
+.thead .who{flex:1;min-width:160px}
+.tm{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap}
+.tm>div{display:flex;flex-direction:column;gap:2px}
+.tm small{color:var(--muted);font-size:11px}
+.gcount{font-family:var(--mono);font-size:18px;font-weight:600;line-height:1.3}
+.gcount.ok{color:var(--ok)}.gcount.bad{color:var(--bad)}
+.fold{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;width:30px;height:30px;cursor:pointer;flex:none}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.card>header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.card .meter{min-width:110px}
+.task{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 14px;border-top:1px solid var(--line)}
+.task:first-of-type{border-top:0}
+.task .name{min-width:0;overflow-wrap:anywhere;display:flex;flex-direction:column}
+.task .name small{color:var(--muted);font-size:11px}
+.tri{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none;direction:ltr}
+.tri button{font:inherit;font-size:13px;font-weight:600;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--muted);padding:6px 11px;cursor:pointer;min-width:40px}
+.tri button:first-child{border-left:0}
+.tri button[data-v="d"][aria-pressed="true"]{background:var(--ok);color:var(--surface)}
+.tri button[data-v="m"][aria-pressed="true"]{background:var(--bad);color:var(--surface)}
+.tri button[data-v="n"][aria-pressed="true"]{background:var(--na);color:var(--surface)}
+.tri button:disabled{cursor:default;opacity:.55}
+.vacant{padding:14px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--muted);font-size:12px}
+.gaps{border-top:1px solid var(--line);background:var(--bg);padding:10px 14px 14px;display:flex;flex-direction:column;gap:8px}
+.gh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.gap{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.gap.done{opacity:.6}.gap.done .gt span{text-decoration:line-through}
+.gck{flex:none;width:26px;height:26px;border-radius:6px;border:2px solid var(--muted);background:var(--surface);color:var(--surface);font-weight:700;cursor:pointer;line-height:1;padding:0}
+.gck[aria-pressed="true"]{background:var(--ok);border-color:var(--ok)}
+.gck:disabled{cursor:default;opacity:.55}
+.gt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+.gt small{color:var(--muted);font-size:11px}
+.gx{flex:none;font:inherit;font-size:12px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:6px;padding:2px 8px;cursor:pointer}
+.gx.conf{color:var(--bad);border-color:var(--bad)}
+.gx:disabled{cursor:default;opacity:.5}
+.gform{display:flex;flex-direction:column;gap:6px}
+.gform input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:100%;min-width:0}
+.gform button{align-self:flex-start;font:inherit;font-weight:600;color:var(--accent-ink);background:var(--accent);border:0;border-radius:8px;padding:7px 14px;cursor:pointer}
+.gform button:disabled,.gform input:disabled{opacity:.5;cursor:default}
+.gl{display:flex;flex-direction:column;gap:8px;padding:12px 16px}
+.btn{font:inherit;font-weight:600;color:var(--accent-ink);background:var(--accent);border:0;border-radius:8px;padding:8px 16px;cursor:pointer}
+.btn.alt{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.btn.warnb{background:var(--warn);color:var(--surface)}
+.btn:disabled{opacity:.45;cursor:default}
+.acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.panel>header.rhead{align-items:center}
+.rhead .ctrls{align-items:center}
+.aform{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;align-items:end}
+.aform label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:500}
+.aform input,.aform select,#mon{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
+.aform .btn{justify-self:start}
+.rolelist{display:flex;flex-direction:column;gap:8px;padding:12px 16px}
+.rolelist div{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.rolelist b{min-width:110px}
+@media (max-width:520px){h1{font-size:19px}.kpi .v{font-size:26px}.task{flex-wrap:wrap}}
+@media (prefers-reduced-motion:no-preference){.meter .f{transition:width .25s ease}}
+</style>
+
+</head><body>
+<div class="wrap" id="app">
+  <div class="bar">
+    <div class="id">
+      <h1 id="ttl">Team KPI Tracker</h1>
+      <span class="sub" id="status"></span>
+    </div>
+    <div class="ctrls">
+      <div class="date">
+        <button id="prev" aria-label="Previous day">‹</button>
+        <input id="day" type="date" aria-label="Day">
+        <button id="next" aria-label="Next day">›</button>
+        <button id="today"></button>
+      </div>
+      <div class="seg" role="group" aria-label="Language">
+        <button id="lang-en" aria-pressed="false">EN</button>
+        <button id="lang-ar" aria-pressed="false">عربي</button>
+      </div>
+      <button class="btn alt" id="adm" type="button"></button>
+      <div class="seg" role="group" aria-label="View">
+        <button id="tab-dash" aria-pressed="true"></button>
+        <button id="tab-check" aria-pressed="false"></button>
+        <button id="tab-reports" aria-pressed="false"></button>
+        <button id="tab-admin" aria-pressed="false" hidden></button>
+      </div>
+    </div>
+  </div>
+  <div id="notice"></div>
+  <main id="view"></main>
+  <div class="legend"><span id="lg1"></span><span id="lg2"></span></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+(function(){
+  var START='2026-10-14', TARGET=0.9, ALERT=0.7;
+  var TEAMS=[
+    {id:'t1',en:'Sayed team',ar:'تيم سيد'},{id:'t2',en:'Bahagt team',ar:'تيم بهجت'},{id:'t3',en:'Khaled team',ar:'تيم خالد'},
+    {id:'tx',en:'Lost & Delivered',ar:'Lost & Delivered'}
+  ];
+  var ONLY=null; if(ONLY) TEAMS=TEAMS.filter(function(t){return t.id===ONLY});
+  var ROLE={Super:['Super','سوبر'],Senior:['Senior','سنيور'],Coordinator:['Coordinator','كوردنيتور'],Temp:['Temp','تيمب']};
+  var TASKS={
+    Super:[['Follow up emails','متابعة الايميلات'],['Follow up WhatsApp group','متابعة جروب الواتس اب'],['Follow up Onboarding group','متابعة جروب الـ Onboarding']],
+    Senior:[['Create & Reactive','الكريت والرياكتف'],['Close users','قفل اليوزرات'],['Dispatch couriers','ارسال المناديب'],['Send shortage','ارسال الشورتاج'],
+      ['Upload absences to Branches sheet','رفع الغيابات على شيت الفروع'],['Upload absences to Fleet sheet','رفع الغيابات على شيت الفليت'],['Finish absences','الانتهاء من الغيابات'],['Emails','الايميلات'],['WhatsApp','الواتس اب']],
+    Coordinator:[['Couriers join Onboarding group','دخول المناديب لجروب الـ Onboarding'],['Couriers leave the group','خروج المناديب من الجروب'],['Fill the Onboarding sheet','ملء شيت الـ Onboarding']],
+    Temp:[['Update Delivered','تحديث Delivered'],['Lost','Lost']]
+  };
+  var BASE=[
+    {id:'sk',team:'t1',role:'Super',name:'Sayed Khaled',ar:'سيد خالد'},
+    {id:'aa',team:'t1',role:'Senior',name:'Ahmed Ali',ar:'أحمد علي'},
+    {id:'ss',team:'t1',role:'Senior',name:'Saied Soliman',ar:'سعيد سليمان'},
+    {id:'ab',team:'t1',role:'Coordinator',name:'Abdelrahman',ar:'عبدالرحمن'},
+    {id:'ah',team:'t2',role:'Super',name:'Ahmed Bahgat',ar:'أحمد بهجت'},
+    {id:'mg',team:'t2',role:'Senior',name:'Mohamed Gamal',ar:'محمد جمال'},
+    {id:'ef',team:'t2',role:'Senior',name:'Eslam Farouk',ar:'إسلام فاروق'},
+    {id:'ms',team:'t2',role:'Coordinator',name:'Mohamed Sayed',ar:'محمد سيد'},
+    {id:'ke',team:'t3',role:'Super',name:'Khaled Emad',ar:'خالد عماد'},
+    {id:'bl',team:'t3',role:'Senior',name:'Belal',ar:'بلال'},
+    {id:'mo',team:'t3',role:'Senior',name:'Moustafa',ar:'مصطفى'},
+    {id:'wc',team:'t3',role:'Coordinator',name:'(Waiting)',ar:'(في الانتظار)',vacant:true},
+    {id:'nh',team:'tx',role:'Temp',name:'Nourhan',ar:'نورهان'}
+  ];
+  if(ONLY) BASE=BASE.filter(function(b){return b.team===ONLY});
+  var PEOPLE=BASE.slice(), staff={}, pd={ar:'',en:'',team:'t1',role:'Senior',from:''}, confP=null;
+  function onDuty(p,d){return !p.vacant&&(!p.from||d>=p.from)&&(!p.to||d<=p.to)}
+  function rebuild(){
+    var baseIds={}; BASE.forEach(function(b){baseIds[b.id]=1});
+    var added=Object.keys(staff).filter(function(id){return !baseIds[id]}).map(function(id){var x=staff[id];
+      return {id:'s'+id,sid:id,added:true,team:x.team,role:x.role,name:x.name||x.ar||'?',ar:x.ar||x.name||'?',from:x.from||START,to:x.to||null,c:x.c||0}})
+      .filter(function(p){return teamOf(p.team)&&ROLE[p.role]}).sort(function(a,b){return a.c-b.c});
+    var base=BASE.filter(function(b){return !(b.vacant&&added.some(function(a){return a.team===b.team&&a.role===b.role&&!a.to}))})
+      .map(function(b){var o=staff[b.id]; return o?Object.assign({},b,{to:o.to||null}):b});
+    PEOPLE=base.concat(added);
+  }
+
+  var $=function(id){return document.getElementById(id)};
+  var store={}, db=null, canWrite=true, tab='dash', teamFilter=ONLY||'all', synced=false, selected=null, writing={}, collapsed={}, lang='en', isAdmin=false, extras={}, months={}, dl=null, selMonth=null;
+  try{lang=localStorage.getItem('kpi-lang')||'en'}catch(e){}
+  if(['en','ar'].indexOf(lang)<0) lang='en';
+  function L(en,ar){return lang==='en'?en:lang==='ar'?ar:en+' · '+ar}
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function tn(t){return esc(L(t.en,t.ar))}
+  function rn(role){return esc(L(ROLE[role][0],ROLE[role][1]))}
+  function pn(p){return lang==='ar'?esc(p.ar):lang==='en'?esc(p.name):esc(p.name)+' <span class="arn">'+esc(p.ar)+'</span>'}
+  function teamOf(id){return TEAMS.filter(function(t){return t.id===id})[0]}
+  function taskHTML(t){return lang==='ar'?'<span dir="auto">'+esc(t[1])+'</span>':lang==='en'?'<span dir="auto">'+esc(t[0])+'</span>':'<span dir="auto">'+esc(t[1])+'</span><small dir="ltr">'+esc(t[0])+'</small>'}
+
+  function cairoToday(){
+    try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}
+    catch(e){return new Date().toISOString().slice(0,10)}
+  }
+  var TODAY=cairoToday(); if(TODAY<START) TODAY=START;
+  selected=TODAY;
+  function addDays(iso,n){var d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
+  function span(from,to){var a=[],d=from;while(d<=to){a.push(d);d=addDays(d,1)}return a}
+
+  function tasksOf(p){
+    var base=TASKS[p.role].map(function(t,i){return {k:String(i),en:t[0],ar:t[1],from:START,to:null,extra:false}});
+    Object.keys(extras).forEach(function(id){
+      var x=extras[id]; if(!x||x.target!==(x.scope==='role'?p.role:p.id)||(x.scope!=='role'&&x.scope!=='person')) return;
+      base.push({k:'x'+id,en:x.en||'',ar:x.ar||'',from:x.from||START,to:x.to||null,extra:true,id:id});
+    });
+    return base;
+  }
+  function activeOn(t,d){return d>=t.from&&(!t.to||d<=t.to)}
+  function val(date,p,k){
+    if(p.vacant||!onDuty(p,date)) return 'n';
+    var c=store[date+'_'+p.team]; return c? c[p.id+'-'+k] : undefined;
+  }
+  function compute(asof,from){
+    var days=span(from||START,asof);
+    return PEOPLE.map(function(p){
+      var r={p:p,dd:0,da:0,td:0,ta:0};
+      tasksOf(p).forEach(function(t){
+        days.forEach(function(d){
+          if(!activeOn(t,d)) return;
+          var v=val(d,p,t.k);
+          if(v!=='n'){r.ta++; if(d===asof)r.da++}
+          if(v==='d'){r.td++; if(d===asof)r.dd++}
+        });
+      });
+      return r;
+    });
+  }
+  function cls(x){return x==null?'na':x>=TARGET?'ok':x>=ALERT?'warn':'bad'}
+  function pct(a,b){return b?a/b:null}
+  function fmt(x){return x==null?'—':Math.round(x*100)+'%'}
+  function meter(x){
+    var w=x==null?0:Math.round(x*100);
+    return '<div class="meter"><span class="t"><span class="f '+cls(x)+'" style="width:'+w+'%"></span></span><b>'+fmt(x)+'</b></div>';
+  }
+  function pill(x){
+    if(x==null) return '<span class="pill na">'+esc(L('No tasks','لا مهام'))+'</span>';
+    return x>=TARGET?'<span class="pill ok">'+esc(L('On target','في الهدف'))+'</span>':x>=ALERT?'<span class="pill warn">'+esc(L('In progress','شغّال'))+'</span>':'<span class="pill bad">'+esc(L('Below alert','تحت الحد'))+'</span>';
+  }
+  function sum(rows,k){return rows.reduce(function(a,r){return a+r[k]},0)}
+  function stat(rs){return {dd:sum(rs,'dd'),da:sum(rs,'da'),td:sum(rs,'td'),ta:sum(rs,'ta')}}
+  function visibleTeams(){return TEAMS.filter(function(t){return teamFilter==='all'||teamFilter===t.id})}
+
+  var gaps={}, drafts={}, confDel=null;
+  function gapList(){return Object.keys(gaps).map(function(id){return Object.assign({id:id},gaps[id])}).sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||(a.c||0)-(b.c||0)})}
+  function openCount(pid){return gapList().filter(function(g){return g.pid===pid&&!g.done}).length}
+  function openIn(teamId){return gapList().filter(function(g){
+    if(g.done) return false; var p=PEOPLE.filter(function(x){return x.id===g.pid})[0]; return p&&(!teamId||teamId==='all'||p.team===teamId)}).length}
+  function gapText(g){return (g.ar?'<span dir="rtl" lang="ar">'+esc(g.ar)+'</span>':'')+(g.en?'<span dir="ltr" lang="en">'+esc(g.en)+'</span>':'')}
+  function gapBlock(p){
+    var list=gapList().filter(function(g){return g.pid===p.id});
+    var open=list.filter(function(g){return !g.done}).length, d=drafts[p.id]||{ar:'',en:''}, dis=canWrite?'':' disabled';
+    var h='<div class="gaps"><div class="gh"><b>'+esc(L('Shortfalls','التقصير'))+'</b><span class="pill '+(open?'bad':'ok')+'">'+esc(open?open+' '+L('open','مفتوح'):L('none','لا يوجد'))+'</span></div>';
+    list.forEach(function(g){
+      h+='<div class="gap'+(g.done?' done':'')+'"><button class="gck" data-gdone="'+g.id+'" aria-pressed="'+(!!g.done)+'" title="'+esc(L('Done','تم'))+'" aria-label="'+esc(L('Done','تم'))+'"'+dis+'>'+(g.done?'✓':'')+'</button>'+
+        '<div class="gt">'+gapText(g)+'<small>'+esc(L('Added','أضيف'))+' '+esc(g.d||'')+(g.done&&g.dd?' — '+esc(L('Done','تم'))+' '+esc(g.dd):'')+'</small></div>'+
+        '<button class="gx'+(confDel===g.id?' conf':'')+'" data-gdel="'+g.id+'" aria-label="'+esc(L('Delete','حذف'))+'"'+dis+'>'+(confDel===g.id?esc(L('Confirm','تأكيد')):'×')+'</button></div>';
+    });
+    h+='<form class="gform" data-gform="'+p.id+'"><input id="gar-'+p.id+'" data-gin="ar" data-pid="'+p.id+'" dir="rtl" lang="ar" placeholder="التقصير بالعربي" value="'+esc(d.ar)+'"'+dis+'>'+
+      '<input id="gen-'+p.id+'" data-gin="en" data-pid="'+p.id+'" dir="ltr" lang="en" placeholder="Shortfall in English" value="'+esc(d.en)+'"'+dis+'>'+
+      '<button type="submit"'+dis+'>'+esc(L('Add shortfall','إضافة تقصير'))+'</button></form></div>';
+    return h;
+  }
+  function gapPanel(){
+    var open=gapList().filter(function(g){
+      if(g.done) return false; var p=PEOPLE.filter(function(x){return x.id===g.pid})[0]; return p&&(teamFilter==='all'||p.team===teamFilter)});
+    var h='<section class="panel"><header><h2>'+esc(L('Open shortfalls','التقصير المفتوح'))+'</h2><span class="sub">'+open.length+' '+esc(L('open','مفتوح'))+'</span></header>';
+    if(!open.length) return h+'<div class="vacant">'+esc(L('No open shortfalls. Add them from Daily check.','مفيش تقصير مفتوح، ضيفه من المتابعة اليومية.'))+'</div></section>';
+    h+='<div class="gl">';
+    open.forEach(function(g){
+      var p=PEOPLE.filter(function(x){return x.id===g.pid})[0];
+      h+='<div class="gap"><div class="gt"><b>'+pn(p)+' <span class="arn">· '+tn(teamOf(p.team))+'</span></b>'+gapText(g)+'<small>'+esc(L('Added','أضيف'))+' '+esc(g.d||'')+'</small></div></div>';
+    });
+    return h+'</div></section>';
+  }
+
+  function chips(){
+    if(ONLY) return '';
+    var h='<div class="chips" role="group" aria-label="Team">';
+    [{id:'all',en:'All teams',ar:'كل التيمات'}].concat(TEAMS).forEach(function(t){
+      h+='<button class="chip" data-team="'+t.id+'" aria-pressed="'+(teamFilter===t.id)+'">'+tn(t)+'</button>';
+    });
+    return h+'</div>';
+  }
+  function teamHeader(t,rs,fold,asPanel){
+    var a=stat(rs), sup=PEOPLE.filter(function(p){return p.team===t.id&&p.role==='Super'})[0];
+    var open=rs.reduce(function(n,r){return n+(r.p.vacant?0:openCount(r.p.id))},0);
+    var people=rs.filter(function(r){return !r.p.vacant}).length;
+    return '<header class="thead">'+(fold?'<button class="fold" data-fold="'+t.id+'" aria-expanded="'+(!collapsed[t.id])+'" aria-label="'+esc(L('Show or hide','إظهار أو إخفاء'))+'">'+(collapsed[t.id]?'▸':'▾')+'</button>':'')+
+      '<div class="who"><h2>'+tn(t)+'</h2><span>'+(sup?esc(L('Super','سوبر'))+': '+pn(sup)+' · ':'')+people+' '+esc(L('people','أفراد'))+'</span></div>'+
+      '<div class="tm"><div><small>'+esc(L('Day','اليوم'))+'</small>'+meter(pct(a.dd,a.da))+'</div><div><small>'+esc(L('To date','التراكمي'))+'</small>'+meter(pct(a.td,a.ta))+'</div><div><small>'+esc(L('Open gaps','التقصير'))+'</small><b class="gcount '+(open?'bad':'ok')+'">'+open+'</b></div></div></header>';
+  }
+
+  function dash(){
+    var all=compute(selected).filter(function(r){return onDuty(r.p,selected)||r.p.vacant}), rows=all.filter(function(r){return teamFilter==='all'||r.p.team===teamFilter}), tot=stat(rows);
+    var dp=pct(tot.dd,tot.da), tp=pct(tot.td,tot.ta), scope=teamFilter==='all'?esc(L('All teams','كل التيمات')):tn(teamOf(teamFilter)), og=openIn(teamFilter);
+    var h=chips()+'<div class="kpis">'+
+      '<div class="kpi"><span class="l">'+esc(L('Completion · selected day','نسبة الانجاز · اليوم المختار'))+'</span><span class="v '+cls(dp)+'">'+fmt(dp)+'</span><span class="s">'+scope+' · '+esc(selected)+'</span></div>'+
+      '<div class="kpi"><span class="l">'+esc(L('Completion · to date','نسبة الانجاز · من البداية'))+'</span><span class="v '+cls(tp)+'">'+fmt(tp)+'</span><span class="s">'+esc(START)+' → '+esc(selected)+'</span></div>'+
+      '<div class="kpi"><span class="l">'+esc(L('Done that day','اتعمل في اليوم'))+'</span><span class="v">'+tot.dd+'<span style="font-size:16px;color:var(--muted)"> / '+tot.da+'</span></span><span class="s">'+esc(L('tasks marked ✓','مهام معلّمة ✓'))+'</span></div>'+
+      '<div class="kpi"><span class="l">'+esc(L('Still open that day','لسه مفتوح في اليوم'))+'</span><span class="v">'+(tot.da-tot.dd)+'</span><span class="s">'+esc(L('✗ or not reported','✗ أو لسه ما اتسجلتش'))+'</span></div>'+
+      '<div class="kpi"><span class="l">'+esc(L('Open shortfalls','التقصير المفتوح'))+'</span><span class="v '+(og?'bad':'ok')+'">'+og+'</span><span class="s">'+esc(L('waiting to be ticked off','مستني يتعلّم'))+'</span></div></div>';
+    visibleTeams().forEach(function(t){
+      var rs=all.filter(function(r){return r.p.team===t.id});
+      h+='<section class="panel">'+teamHeader(t,rs,false)+'<div class="scroll"><table><thead><tr><th>'+esc(L('Employee','الموظف'))+'</th><th class="n">'+esc(L('Day done','اتعمل اليوم'))+'</th><th>'+esc(L('Day %','نسبة اليوم'))+'</th><th>'+esc(L('To-date %','نسبة التراكمي'))+'</th><th>'+esc(L('Status','الحالة'))+'</th><th class="n">'+esc(L('Open gaps','التقصير'))+'</th></tr></thead><tbody>';
+      rs.forEach(function(r){
+        var p=r.p, x=pct(r.dd,r.da);
+        h+='<tr><td><div class="who"><b>'+pn(p)+'</b><span>'+rn(p.role)+'</span></div></td><td class="n mono">'+r.dd+' / '+r.da+'</td><td>'+meter(x)+'</td><td>'+meter(pct(r.td,r.ta))+'</td><td>'+(p.vacant?'<span class="pill na">'+esc(L('Vacant','شاغر'))+'</span>':pill(x))+'</td><td class="n mono">'+(p.vacant?'—':openCount(p.id))+'</td></tr>';
+      });
+      h+='</tbody></table></div></section>';
+    });
+    return h+gapPanel();
+  }
+
+  function check(){
+    var all=compute(selected).filter(function(r){return onDuty(r.p,selected)||r.p.vacant}), h=chips();
+    visibleTeams().forEach(function(t){
+      var rs=all.filter(function(r){return r.p.team===t.id});
+      h+='<section class="team">'+teamHeader(t,rs,true);
+      if(!collapsed[t.id]){
+        h+='<div class="cards">';
+        rs.forEach(function(r){
+          var p=r.p;
+          h+='<section class="card"><header><div class="who"><b>'+pn(p)+'</b><span>'+rn(p.role)+'</span></div>'+(p.vacant?'<span class="pill na">'+esc(L('Vacant','شاغر'))+'</span>':meter(pct(r.dd,r.da)))+'</header>';
+          if(p.vacant){h+='<div class="vacant">'+esc(L('No one assigned yet.','مفيش حد متعيّن لسه.'))+'</div>'}
+          else tasksOf(p).filter(function(t){return activeOn(t,selected)}).forEach(function(t){
+            var v=val(selected,p,t.k), dis=(canWrite&&!locked(selected))?'':' disabled', nm=esc(L(t.en||t.ar,t.ar||t.en));
+            h+='<div class="task"><span class="name">'+taskHTML([t.en||t.ar,t.ar||t.en])+'</span><span class="tri" role="group" aria-label="'+nm+'">'+
+              ['d','m','n'].map(function(k){var lab={d:'✓',m:'✗',n:'N/A'}[k];var ttl=esc({d:L('Done','تم'),m:L('Not done','ما اتعملش'),n:L('Not applicable today','مش مطلوب النهاردة')}[k]);
+                return '<button data-p="'+p.id+'" data-t="'+esc(t.k)+'" data-v="'+k+'" title="'+ttl+'" aria-label="'+ttl+'" aria-pressed="'+(v===k)+'"'+dis+'>'+lab+'</button>'}).join('')+'</span></div>';
+          });
+          if(!p.vacant) h+=gapBlock(p);
+          h+='</section>';
+        });
+        h+='</div>';
+      }
+      h+='</section>';
+    });
+    return h;
+  }
+
+  var xd={ar:'',en:'',target:'role:Senior',from:''}, confStop=null, confApprove=false;
+  function locked(d){var m=months[d.slice(0,7)]; return !!(m&&m.approved)}
+  function monthRange(m){
+    var y=+m.slice(0,4), mo=+m.slice(5,7), last=new Date(Date.UTC(y,mo,0)).getUTCDate();
+    var from=m+'-01', end=m+'-'+(last<10?'0'+last:last);
+    return {from:from<START?START:from, to:end>TODAY?TODAY:end, end:end};
+  }
+  function monthLabel(m){
+    var mo=+m.slice(5,7)-1;
+    var en=['January','February','March','April','May','June','July','August','September','October','November','December'][mo];
+    var ar=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][mo];
+    return L(en,ar)+' '+m.slice(0,4);
+  }
+  function monthData(m){
+    var r=monthRange(m), ap=months[m], approved=!!(ap&&ap.approved);
+    var rows=r.from>r.to?PEOPLE.map(function(p){return {p:p,td:0,ta:0}}):compute(r.to,r.from);
+    rows=rows.filter(function(x){return x.ta>0||x.p.vacant||(!x.p.to||x.p.to>=r.to)});
+    if(approved&&ap.snap){rows=rows.map(function(x){var q=ap.snap[x.p.id]; return q?Object.assign({},x,{td:q[0],ta:q[1]}):x})}
+    return {r:r,rows:rows,approved:approved,ap:ap};
+  }
+  function tgLabel(x){
+    if(x.scope==='role'){var r=ROLE[x.target]; return r?L('All '+r[0],'كل '+r[1]):String(x.target)}
+    var p=PEOPLE.filter(function(q){return q.id===x.target})[0]; return p?(lang==='ar'?p.ar:lang==='en'?p.name:p.name+' · '+p.ar):String(x.target);
+  }
+  function reports(){
+    var m=selMonth||TODAY.slice(0,7), md=monthData(m), rows=md.rows, tdn=sum(rows,'td'), tan=sum(rows,'ta'), x=pct(tdn,tan);
+    var inProg=md.r.end>TODAY, canExp=!!dl&&(isAdmin||md.approved), ndays=md.r.from>md.r.to?0:span(md.r.from,md.r.to).length;
+    var st=md.approved?'<span class="pill ok">'+esc(L('Approved','معتمد'))+'</span>':'<span class="pill warn">'+esc(inProg?L('Open · month in progress','مفتوح · الشهر شغّال'):L('Open · not approved','مفتوح · غير معتمد'))+'</span>';
+    var h='<section class="panel"><header class="rhead"><div><h2>'+esc(monthLabel(m))+'</h2><span class="sub">'+esc(md.r.from)+' → '+esc(md.r.to)+'</span></div>'+
+      '<div class="ctrls"><input id="mon" type="month" min="'+START.slice(0,7)+'" max="'+TODAY.slice(0,7)+'" value="'+esc(m)+'" aria-label="Month">'+st+'</div></header><div class="gl">'+
+      '<div class="kpis">'+
+        '<div class="kpi"><span class="l">'+esc(L('Month completion','نسبة انجاز الشهر'))+'</span><span class="v '+cls(x)+'">'+fmt(x)+'</span><span class="s">'+esc(L('✓ ÷ applicable tasks','✓ ÷ المهام المطلوبة'))+'</span></div>'+
+        '<div class="kpi"><span class="l">'+esc(L('Done / applicable','اتعمل / مطلوب'))+'</span><span class="v">'+tdn+'<span style="font-size:16px;color:var(--muted)"> / '+tan+'</span></span><span class="s">'+ndays+' '+esc(L('days counted','يوم محسوب'))+'</span></div>'+
+        '<div class="kpi"><span class="l">'+esc(L('Open shortfalls now','التقصير المفتوح حاليًا'))+'</span><span class="v '+(openIn('all')?'bad':'ok')+'">'+openIn('all')+'</span><span class="s">'+esc(L('listed in the export','موجود في التصدير'))+'</span></div>'+
+      '</div><div class="acts">'+
+        '<button class="btn" data-export="1"'+(canExp?'':' disabled')+'>'+esc(L('Export Excel','تصدير Excel'))+'</button>'+
+        (isAdmin?(md.approved?'<button class="btn alt" data-reopen="1">'+esc(L('Reopen month','إعادة فتح الشهر'))+'</button>':
+          '<button class="btn'+(confApprove?' warnb':'')+'" data-approve="1">'+esc(confApprove?(inProg?L('Month not finished. Approve anyway?','الشهر ما خلصش. اعتماد برضه؟'):L('Confirm approval','تأكيد الاعتماد')):L('Approve month','اعتماد الشهر'))+'</button>'):'')+
+      '</div><span class="sub">'+esc(
+        md.approved?L('Approved. Ticks for this month are locked and the numbers are frozen.','معتمد. تعليم المهام اتقفل والأرقام ثابتة.'):
+        (isAdmin?L('Approving freezes these numbers and locks ticking for the month.','الاعتماد بيثبّت الأرقام ويقفل التعليم للشهر.'):L('Export opens after the owner approves the month.','التصدير بيتفتح لما صاحب الصفحة يعتمد الشهر.')))+
+        (dl?'':' '+L('Downloads are not available in this view.','التحميل مش متاح هنا.'))+'</span></div></section>';
+    TEAMS.forEach(function(t){
+      var rs=rows.filter(function(r){return r.p.team===t.id});
+      h+='<section class="panel"><header><h2>'+tn(t)+'</h2>'+meter(pct(sum(rs,'td'),sum(rs,'ta')))+'</header><div class="scroll"><table><thead><tr><th>'+esc(L('Employee','الموظف'))+'</th><th>'+esc(L('Role','الدور'))+'</th><th class="n">'+esc(L('Done / applicable','اتعمل / مطلوب'))+'</th><th>'+esc(L('Completion','النسبة'))+'</th><th>'+esc(L('Status','الحالة'))+'</th></tr></thead><tbody>';
+      rs.forEach(function(r){
+        var p=r.p, q=pct(r.td,r.ta);
+        h+='<tr><td><b>'+pn(p)+'</b></td><td>'+rn(p.role)+'</td><td class="n mono">'+r.td+' / '+r.ta+'</td><td>'+meter(q)+'</td><td>'+(p.vacant?'<span class="pill na">'+esc(L('Vacant','شاغر'))+'</span>':pill(q))+'</td></tr>';
+      });
+      h+='</tbody></table></div></section>';
+    });
+    return h;
+  }
+  function admin(){
+    var opts='<optgroup label="'+esc(L('Whole role','دور كامل'))+'">'+Object.keys(ROLE).map(function(r){var v='role:'+r;return '<option value="'+v+'"'+(xd.target===v?' selected':'')+'>'+esc(L('All '+ROLE[r][0],'كل '+ROLE[r][1]))+'</option>'}).join('')+'</optgroup>'+
+      '<optgroup label="'+esc(L('One person','موظف واحد'))+'">'+PEOPLE.filter(function(p){return !p.vacant}).map(function(p){var v='person:'+p.id;return '<option value="'+v+'"'+(xd.target===v?' selected':'')+'>'+esc(p.name+' · '+p.ar)+'</option>'}).join('')+'</optgroup>';
+    var h='<section class="panel"><header><h2>'+esc(L('Add a task','إضافة مهمة'))+'</h2><span class="sub">'+esc(L('For a whole role or one person, from the start date on. Past days are not affected.','لدور كامل أو لموظف واحد، من تاريخ البداية. الأيام اللي فاتت مش بتتأثر.'))+'</span></header>'+
+      '<form class="aform gl" data-xform="1">'+
+      '<label>'+esc(L('Task in Arabic','المهمة بالعربي'))+'<input id="xar" data-xin="ar" dir="rtl" lang="ar" value="'+esc(xd.ar)+'"></label>'+
+      '<label>'+esc(L('Task in English','المهمة بالإنجليزي'))+'<input id="xen" data-xin="en" dir="ltr" lang="en" value="'+esc(xd.en)+'"></label>'+
+      '<label>'+esc(L('Applies to','بتنطبق على'))+'<select id="xtarget" data-xin="target">'+opts+'</select></label>'+
+      '<label>'+esc(L('Starts on','بتبدأ من'))+'<input id="xfrom" data-xin="from" type="date" min="'+START+'" value="'+esc(xd.from||TODAY)+'"></label>'+
+      '<button class="btn" type="submit">'+esc(L('Add task','إضافة المهمة'))+'</button></form></section>';
+    var list=Object.keys(extras).map(function(id){return Object.assign({id:id},extras[id])}).sort(function(a,b){return (a.c||0)-(b.c||0)});
+    h+='<section class="panel"><header><h2>'+esc(L('Extra tasks','المهام الإضافية'))+'</h2><span class="sub">'+list.length+'</span></header>';
+    if(!list.length) h+='<div class="vacant">'+esc(L('No extra tasks yet.','مفيش مهام إضافية لسه.'))+'</div>';
+    else{
+      h+='<div class="scroll"><table><thead><tr><th>'+esc(L('Task','المهمة'))+'</th><th>'+esc(L('Applies to','بتنطبق على'))+'</th><th>'+esc(L('From','من'))+'</th><th>'+esc(L('Until','لحد'))+'</th><th>'+esc(L('Status','الحالة'))+'</th><th></th></tr></thead><tbody>';
+      list.forEach(function(x){
+        var stopped=x.to&&x.to<TODAY||(x.to&&x.to<(x.from||START)), sched=!stopped&&(x.from||START)>TODAY;
+        var pl=stopped?'<span class="pill na">'+esc(L('Stopped','موقوفة'))+'</span>':sched?'<span class="pill warn">'+esc(L('Scheduled','مجدولة'))+'</span>':'<span class="pill ok">'+esc(L('Active','شغّالة'))+'</span>';
+        h+='<tr><td><div class="who"><b dir="auto">'+esc(x.ar||x.en)+'</b>'+(x.ar&&x.en?'<span dir="ltr">'+esc(x.en)+'</span>':'')+'</div></td><td>'+esc(tgLabel(x))+'</td><td class="mono">'+esc(x.from||START)+'</td><td class="mono">'+esc(x.to||'—')+'</td><td>'+pl+'</td><td class="n">'+(stopped?'':'<button class="btn alt" data-xstop="'+x.id+'">'+esc(confStop===x.id?L('Confirm stop','تأكيد الإيقاف'):L('Stop','إيقاف'))+'</button>')+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
+    }
+    h+='</section><section class="panel"><header><h2>'+esc(L('Add a team member','إضافة موظف'))+'</h2><span class="sub">'+esc(L('Counts from the start date. Adding a Coordinator to Team 3 replaces the vacant slot.','بيتحسب من تاريخ البداية. إضافة كوردينيتور لتيم 3 بتحل محل الخانة الشاغرة.'))+'</span></header>'+
+      '<form class="aform gl" data-pform="1">'+
+      '<label>'+esc(L('Name in Arabic','الاسم بالعربي'))+'<input id="par" data-pin="ar" dir="rtl" lang="ar" value="'+esc(pd.ar)+'"></label>'+
+      '<label>'+esc(L('Name in English','الاسم بالإنجليزي'))+'<input id="pen" data-pin="en" dir="ltr" lang="en" value="'+esc(pd.en)+'"></label>'+
+      '<label>'+esc(L('Team','التيم'))+'<select id="pteam" data-pin="team">'+TEAMS.map(function(t){return '<option value="'+t.id+'"'+(pd.team===t.id?' selected':'')+'>'+esc(L(t.en,t.ar))+'</option>'}).join('')+'</select></label>'+
+      '<label>'+esc(L('Role','الدور'))+'<select id="prole" data-pin="role">'+Object.keys(ROLE).map(function(r){return '<option value="'+r+'"'+(pd.role===r?' selected':'')+'>'+esc(L(ROLE[r][0],ROLE[r][1]))+'</option>'}).join('')+'</select></label>'+
+      '<label>'+esc(L('Starts on','بيبدأ من'))+'<input id="pfrom" data-pin="from" type="date" min="'+START+'" value="'+esc(pd.from||TODAY)+'"></label>'+
+      '<button class="btn" type="submit">'+esc(L('Add member','إضافة الموظف'))+'</button></form></section>';
+    h+='<section class="panel"><header><h2>'+esc(L('Team members','أعضاء التيمات'))+'</h2><span class="sub">'+esc(L('Removing keeps their past records and stops counting them from today.','الحذف بيحتفظ بسجلهم السابق وبيوقف حسابهم من النهاردة.'))+'</span></header><div class="rolelist">';
+    TEAMS.forEach(function(t){
+      var ps=PEOPLE.filter(function(p){return p.team===t.id&&!p.vacant});
+      h+='<div><b>'+tn(t)+'</b>'+(ps.length?'':'<span class="sub">—</span>')+'</div>';
+      ps.forEach(function(p){
+        var off=p.to&&p.to<TODAY, key=p.added?p.sid:p.id;
+        h+='<div><span>'+pn(p)+'</span><span class="pill na">'+rn(p.role)+'</span>'+(off?'<span class="pill warn">'+esc(L('Removed','محذوف'))+' · '+esc(p.to)+'</span><button class="btn alt" data-prest="'+esc(key)+'">'+esc(L('Reinstate','إرجاع'))+'</button>':
+          '<button class="btn alt" data-pdel="'+esc(key)+'">'+esc(confP===key?L('Confirm removal','تأكيد الحذف'):L('Remove','حذف'))+'</button>')+'</div>';
+      });
+    });
+    h+='</div></section><section class="panel"><header><h2>'+esc(L('Default tasks','المهام الأساسية'))+'</h2><span class="sub">'+esc(L('Built into the tracker. Ask Claude to change them.','جوّه الصفحة. اطلب من Claude يغيّرها.'))+'</span></header><div class="rolelist">';
+    Object.keys(TASKS).forEach(function(r){
+      h+='<div><b>'+esc(L(ROLE[r][0],ROLE[r][1]))+'</b>'+TASKS[r].map(function(t){return '<span class="pill na" dir="auto">'+esc(L(t[0],t[1]))+'</span>'}).join('')+'</div>';
+    });
+    return h+'</div></section>';
+  }
+  function addExtra(){
+    if(!db||!isAdmin) return;
+    var ar=xd.ar.trim(), en=xd.en.trim(); if(!ar&&!en) return;
+    var tg=(xd.target||'role:Senior').split(':'), from=xd.from||TODAY; if(from<START) from=START;
+    xd={ar:'',en:'',target:xd.target||'role:Senior',from:''}; render();
+    queue('xnew',function(){return db.collection('extra').add({scope:tg[0],target:tg[1],ar:ar,en:en,from:from,to:null,c:Date.now()})});
+  }
+  function approveMonth(m){
+    var md=monthData(m), snap={}; md.rows.forEach(function(r){snap[r.p.id]=[r.td,r.ta]});
+    var doc={approved:true,at:new Date().toISOString(),from:md.r.from,to:md.r.to,snap:snap};
+    months[m]=doc; confApprove=false; render();
+    queue('m'+m,function(){return db.doc('months/'+m).set(doc)});
+  }
+  function reopenMonth(m){
+    var doc={approved:false,at:new Date().toISOString(),reopened:true};
+    months[m]=doc; render();
+    queue('m'+m,function(){return db.doc('months/'+m).set(doc)});
+  }
+  function exportMonth(m){
+    if(typeof XLSX==='undefined'){$('notice').innerHTML='<div class="note">'+esc(L('The Excel export library did not load. Reload the page.','مكتبة التصدير ما اتحمّلتش. حدّث الصفحة.'))+'</div>';return}
+    var md=monthData(m), rows=md.rows, wb=XLSX.utils.book_new(), n=rows.length, last=n+1;
+    var S=[['Month','Team','Employee','الموظف','Role','Done','Applicable','Completion %','Open shortfalls (now)','Status']];
+    rows.forEach(function(r,i){
+      var p=r.p, k=i+2;
+      S.push([m,teamOf(p.team).en,p.name,p.ar,ROLE[p.role][0],r.td,r.ta,
+        {t:'n',f:'IF(G'+k+'=0,"",F'+k+'/G'+k+')',z:'0%'}, p.vacant?0:openCount(p.id),
+        {t:'s',f:'IF(H'+k+'="","—",IF(H'+k+'>='+TARGET+',"On target",IF(H'+k+'>='+ALERT+',"In progress","Below alert")))'}]);
+    });
+    S.push(['','All teams','','','',{t:'n',f:'SUM(F2:F'+last+')'},{t:'n',f:'SUM(G2:G'+last+')'},{t:'n',f:'IF(G'+(last+1)+'=0,"",F'+(last+1)+'/G'+(last+1)+')',z:'0%'},{t:'n',f:'SUM(I2:I'+last+')'},'']);
+    var ws=XLSX.utils.aoa_to_sheet(S); ws['!cols']=[{wch:10},{wch:12},{wch:22},{wch:18},{wch:14},{wch:8},{wch:11},{wch:13},{wch:20},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,'Summary');
+    var T=[['Team','الفريق','Done','Applicable','Completion %','Open shortfalls']];
+    TEAMS.forEach(function(t,i){var k=i+2;
+      T.push([t.en,t.ar,{t:'n',f:'SUMIF(Summary!$B$2:$B$'+last+',A'+k+',Summary!$F$2:$F$'+last+')'},{t:'n',f:'SUMIF(Summary!$B$2:$B$'+last+',A'+k+',Summary!$G$2:$G$'+last+')'},
+        {t:'n',f:'IF(D'+k+'=0,"",C'+k+'/D'+k+')',z:'0%'},{t:'n',f:'SUMIF(Summary!$B$2:$B$'+last+',A'+k+',Summary!$I$2:$I$'+last+')'}]);
+    });
+    var wt=XLSX.utils.aoa_to_sheet(T); wt['!cols']=[{wch:12},{wch:12},{wch:8},{wch:11},{wch:13},{wch:16}];
+    XLSX.utils.book_append_sheet(wb,wt,'Teams');
+    var D=[['Date','Team','Employee','الموظف','Role','Task','المهمة','Status']];
+    if(md.r.from<=md.r.to) span(md.r.from,md.r.to).forEach(function(d){
+      PEOPLE.forEach(function(p){
+        if(p.vacant) return;
+        tasksOf(p).forEach(function(t){
+          if(!activeOn(t,d)) return;
+          var v=val(d,p,t.k);
+          D.push([d,teamOf(p.team).en,p.name,p.ar,ROLE[p.role][0],t.en||t.ar,t.ar||t.en,v==='d'?'Done':v==='m'?'Not done':v==='n'?'N/A':'Not reported']);
+        });
+      });
+    });
+    var wd=XLSX.utils.aoa_to_sheet(D); wd['!cols']=[{wch:11},{wch:12},{wch:22},{wch:18},{wch:14},{wch:34},{wch:34},{wch:13}];
+    XLSX.utils.book_append_sheet(wb,wd,'Daily');
+    var G=[['Employee','الموظف','Team','التقصير','Shortfall','Added','Status','Done on']];
+    gapList().forEach(function(g){var p=PEOPLE.filter(function(q){return q.id===g.pid})[0]; if(!p) return;
+      G.push([p.name,p.ar,teamOf(p.team).en,g.ar||'',g.en||'',g.d||'',g.done?'Done':'Open',g.dd||'']);});
+    var wg=XLSX.utils.aoa_to_sheet(G); wg['!cols']=[{wch:22},{wch:18},{wch:12},{wch:30},{wch:30},{wch:11},{wch:9},{wch:11}];
+    XLSX.utils.book_append_sheet(wb,wg,'Shortfalls');
+    var I=[['Month',m],['Period counted',md.r.from+' → '+md.r.to],['Status',md.approved?'Approved '+String(md.ap.at||'').slice(0,10):'DRAFT — not approved'],
+      ['Generated',new Date().toISOString().slice(0,16).replace('T',' ')+' UTC'],['Target %',TARGET],['Alert below %',ALERT],
+      ['How it is calculated','Completion = tasks marked Done ÷ applicable tasks (N/A excluded; not reported counts as not done).'],
+      ['Approved months','Summary numbers are the frozen figures taken when the month was approved.']];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(I),'Info');
+    wb.Workbook={CalcPr:{fullCalcOnLoad:true}};
+    var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+    dl.save({filename:'KPI-'+m+(md.approved?'':'-DRAFT')+'.xlsx',data:new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}).catch(function(e){
+      if(e&&e.code==='declined') return;
+      $('notice').innerHTML='<div class="note">'+esc(L('Could not export','ما اتصدّرش'))+' ('+esc(e&&e.code||'error')+').</div>';
+    });
+  }
+
+  function addMember(){
+    if(!db||!isAdmin) return;
+    var ar=pd.ar.trim(), en=pd.en.trim(); if(!ar&&!en) return;
+    var from=pd.from||TODAY; if(from<START) from=START;
+    var doc={team:pd.team,role:pd.role,ar:ar,en:en,name:en||ar,from:from,to:null,c:Date.now()};
+    pd={ar:'',en:'',team:pd.team,role:pd.role,from:''}; render();
+    queue('pnew',function(){return db.collection('staff').add(doc)});
+  }
+  function render(){
+    document.documentElement.lang=lang==='ar'?'ar':'en';
+    $('app').dir=lang==='ar'?'rtl':'ltr';
+    ['en','ar'].forEach(function(k){$('lang-'+k).setAttribute('aria-pressed',lang===k)}); setAdm();
+    $('ttl').textContent=L('Team KPI Tracker','متابعة أداء الفريق');
+    $('today').textContent=L('Today','النهاردة');
+    $('tab-dash').textContent=L('Dashboard','لوحة المتابعة');
+    $('tab-check').textContent=L('Daily check','المتابعة اليومية');
+    $('lg1').textContent=L('Completion = ✓ tasks ÷ applicable tasks (N/A excluded, blank counts as not done)','النسبة = المهام ✓ ÷ المهام المطلوبة (N/A مش محسوبة، والفاضي يعني لسه ما اتعملتش)');
+    $('lg2').textContent=L('Green ≥ ','أخضر ≥ ')+Math.round(TARGET*100)+'% · '+L('Amber ≥ ','أصفر ≥ ')+Math.round(ALERT*100)+'% · '+L('Red below','أحمر أقل');
+    $('day').value=selected; $('day').min=START; $('day').max=TODAY;
+    $('prev').disabled=selected<=START; $('next').disabled=selected>=TODAY; $('today').disabled=selected===TODAY;
+    if(tab==='admin'&&!isAdmin) tab='dash';
+    $('tab-reports').textContent=L('Reports & export','التقارير والتصدير');
+    $('tab-admin').textContent=L('Manage tasks','إدارة المهام'); $('tab-admin').hidden=!isAdmin;
+    ['dash','check','reports','admin'].forEach(function(k){$('tab-'+k).setAttribute('aria-pressed',tab===k)});
+    var ae=document.activeElement, fid=(ae&&ae.id&&$('view').contains(ae))?ae.id:null, ss=null, se=null;
+    if(fid&&ae.selectionStart!=null){ss=ae.selectionStart;se=ae.selectionEnd}
+    $('view').innerHTML = ({dash:dash,check:check,reports:reports,admin:admin})[tab]();
+    if(fid){var fe=$(fid); if(fe){fe.focus(); try{if(ss!=null)fe.setSelectionRange(ss,se)}catch(e){}}}
+    $('status').textContent = db? (synced?L('Live · shared with the team','مباشر · مشترك مع الفريق'):L('Loading saved data…','جاري تحميل البيانات…')) : L('Offline view · changes are not saved','عرض بدون اتصال · التغييرات مش بتتحفظ');
+    $('notice').innerHTML = (db&&!canWrite)?'<div class="note">'+esc(L('You can view this tracker but not edit it. Ask the owner for Contributor access.','تقدر تشوف الصفحة بس مش تعدّل. اطلب صلاحية Contributor من صاحب الصفحة.'))+'</div>':
+      (!db?'<div class="note">'+esc(L('Shared saving is unavailable in this view. Open the artifact link while signed in.','الحفظ المشترك مش متاح هنا. افتح اللينك وانت مسجّل دخول.'))+'</div>':'');
+    if(tab==='check'&&locked(selected)) $('notice').innerHTML+='<div class="note">'+esc(L('This month is approved and locked. The owner can reopen it from Reports.','الشهر ده معتمد ومقفول. صاحب الصفحة يقدر يفتحه من التقارير.'))+'</div>';
+  }
+
+  function failNote(e){$('notice').innerHTML='<div class="note">'+esc(L('Could not save','ما اتحفظش'))+' ('+esc(e&&e.code||'error')+'). '+esc(L('Reload and try again.','حدّث الصفحة وجرّب تاني.'))+'</div>'}
+  function queue(key,fn){writing[key]=(writing[key]||Promise.resolve()).then(fn).catch(failNote)}
+  function save(docId,key,v){
+    var ref=db.doc('days/'+docId);
+    queue(docId,function(){
+      return ref.get().then(function(s){
+        var body={c:{}}; body.c[key]=v;
+        return ref.set(body,{merge:true});
+      });
+    });
+  }
+  function setVal(pid,ti,v){
+    var p=PEOPLE.filter(function(x){return x.id===pid})[0]; if(!p||p.vacant||!db||!canWrite||locked(selected)) return;
+    var docId=selected+'_'+p.team, key=pid+'-'+ti, cur=val(selected,p,ti), nv=(cur===v)?null:v;
+    var c=Object.assign({},store[docId]||{}); c[key]=nv; store[docId]=c;
+    render(); save(docId,key,nv);
+  }
+
+  $('view').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    if(b.dataset.team){teamFilter=b.dataset.team;render();return}
+    if(b.dataset.fold){collapsed[b.dataset.fold]=!collapsed[b.dataset.fold];render();return}
+    var mm=selMonth||TODAY.slice(0,7);
+    if(b.dataset.export){if(dl)exportMonth(mm);return}
+    if(b.dataset.approve){
+      if(!db||!isAdmin) return;
+      if(!confApprove){confApprove=true;render();setTimeout(function(){if(confApprove){confApprove=false;render()}},5000);return}
+      approveMonth(mm);return;
+    }
+    if(b.dataset.reopen){if(db&&isAdmin)reopenMonth(mm);return}
+    if(b.dataset.pdel||b.dataset.prest){
+      if(!db||!isAdmin) return; var k=b.dataset.pdel||b.dataset.prest, isNew=!BASE.some(function(q){return q.id===k});
+      if(b.dataset.prest){
+        if(isNew){staff[k]=Object.assign({},staff[k],{to:null});rebuild();render();queue('p'+k,function(){return db.doc('staff/'+k).update({to:null})})}
+        else{delete staff[k];rebuild();render();queue('p'+k,function(){return db.doc('staff/'+k).delete()})}
+        return;
+      }
+      if(confP!==k){confP=k;render();setTimeout(function(){if(confP===k){confP=null;render()}},4000);return}
+      confP=null; var to2=addDays(TODAY,-1);
+      staff[k]=Object.assign({},staff[k],{to:to2}); rebuild(); render();
+      queue('p'+k,function(){return isNew?db.doc('staff/'+k).update({to:to2}):db.doc('staff/'+k).set({to:to2})});
+      return;
+    }
+    if(b.dataset.xstop){
+      if(!db||!isAdmin) return; var xid=b.dataset.xstop;
+      if(confStop!==xid){confStop=xid;render();setTimeout(function(){if(confStop===xid){confStop=null;render()}},4000);return}
+      confStop=null; var to=addDays(TODAY,-1); extras[xid]=Object.assign({},extras[xid],{to:to}); render();
+      queue('x'+xid,function(){return db.doc('extra/'+xid).update({to:to})});
+      return;
+    }
+    if(!db||!canWrite) return;
+    if(b.dataset.p){setVal(b.dataset.p,b.dataset.t,b.dataset.v)}
+    else if(b.dataset.gdone){
+      var id=b.dataset.gdone, g=gaps[id]; if(!g) return; var nv=!g.done, upd={done:nv,dd:nv?TODAY:null};
+      gaps[id]=Object.assign({},g,upd); render();
+      queue('g'+id,function(){return db.doc('gaps/'+id).update(upd)});
+    } else if(b.dataset.gdel){
+      var did=b.dataset.gdel;
+      if(confDel!==did){confDel=did; render(); setTimeout(function(){if(confDel===did){confDel=null;render()}},4000); return}
+      confDel=null; delete gaps[did]; render();
+      queue('g'+did,function(){return db.doc('gaps/'+did).delete()});
+    }
+  });
+  $('view').addEventListener('input',function(e){
+    var t=e.target; if(t.dataset&&t.dataset.gin){var pid=t.dataset.pid; drafts[pid]=drafts[pid]||{ar:'',en:''}; drafts[pid][t.dataset.gin]=t.value}
+    if(t.dataset&&t.dataset.xin){xd[t.dataset.xin]=t.value}
+    if(t.dataset&&t.dataset.pin){pd[t.dataset.pin]=t.value}
+  });
+  $('view').addEventListener('submit',function(e){
+    var f=e.target.closest('form'); if(!f) return;
+    if(f.dataset.xform){e.preventDefault();addExtra();return}
+    if(f.dataset.pform){e.preventDefault();addMember();return}
+    if(!f.dataset.gform) return; e.preventDefault();
+    var pid=f.dataset.gform, d=drafts[pid]||{ar:'',en:''}, ar=d.ar.trim(), en=d.en.trim();
+    if((!ar&&!en)||!db||!canWrite) return;
+    drafts[pid]={ar:'',en:''}; render();
+    queue('gnew',function(){return db.collection('gaps').add({pid:pid,ar:ar,en:en,done:false,d:TODAY,c:Date.now()})});
+  });
+  $('view').addEventListener('change',function(e){
+    var t=e.target; if(t.id==='mon'&&t.value){selMonth=t.value;confApprove=false;render()}
+  });
+  function go(d){if(d<START)d=START;if(d>TODAY)d=TODAY;selected=d;render()}
+  $('prev').onclick=function(){go(addDays(selected,-1))};
+  $('next').onclick=function(){go(addDays(selected,1))};
+  $('today').onclick=function(){go(TODAY)};
+  $('day').onchange=function(){if($('day').value)go($('day').value)};
+  $('tab-dash').onclick=function(){tab='dash';render()};
+  $('tab-check').onclick=function(){tab='check';render()};
+  $('tab-reports').onclick=function(){tab='reports';render()};
+  $('tab-admin').onclick=function(){tab='admin';render()};
+  ['en','ar'].forEach(function(k){$('lang-'+k).onclick=function(){lang=k;try{localStorage.setItem('kpi-lang',k)}catch(e){}render()}});
+  try{var hh=(location.hash||'').replace('#','');if(hh==='check'){tab='check'}}catch(e){}
+  render();
+
+  var FBCFG={apiKey:"AIzaSyB5wMhA8mN9gr-tmb3bqKJi-WkptrHvq8k",authDomain:"team-kpi-tracker-30bd0.firebaseapp.com",projectId:"team-kpi-tracker-30bd0",storageBucket:"team-kpi-tracker-30bd0.firebasestorage.app",messagingSenderId:"963123858248",appId:"1:963123858248:web:03d6a1e8bc8ee71151c17d"};
+  var fbAuth=null;
+  function setAdm(){var b=$('adm'); if(b) b.textContent=isAdmin?L('Sign out','تسجيل خروج'):L('Admin sign-in','دخول الإدارة')}
+  $('adm').onclick=function(){
+    if(!fbAuth) return;
+    if(isAdmin){fbAuth.signOut();return}
+    var em=window.prompt(L('Admin email','إيميل الإدارة')); if(!em) return;
+    var pw=window.prompt(L('Password','الباسورد')); if(!pw) return;
+    fbAuth.signInWithEmailAndPassword(em.trim(),pw).catch(function(){$('notice').innerHTML='<div class="note">'+esc(L('Wrong email or password.','الإيميل أو الباسورد غلط.'))+'</div>'});
+  };
+  if(window.firebase){
+    Promise.resolve().then(function(){
+      firebase.initializeApp(FBCFG);
+      db=firebase.firestore(); fbAuth=firebase.auth();
+      dl={save:function(o){return new Promise(function(res){var u=URL.createObjectURL(o.data),a=document.createElement('a');a.href=u;a.download=o.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);res({status:'saved'})})}};
+      fbAuth.onAuthStateChanged(function(u){isAdmin=!!u;if(!u&&(tab==='admin')) tab='dash';render()});
+      if(!db){render();return}
+      db.collection('days').onSnapshot(function(snap){
+        var m={}; snap.docs.forEach(function(d){var x=d.data();m[d.id]=(x&&x.c)||{}});
+        store=m; synced=true; render();
+      },function(){synced=false;render()});
+      db.collection('gaps').onSnapshot(function(snap){
+        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
+        gaps=m; render();
+      },function(){});
+      db.collection('extra').onSnapshot(function(snap){
+        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
+        extras=m; render();
+      },function(){});
+      db.collection('staff').onSnapshot(function(snap){
+        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
+        staff=m; rebuild(); render();
+      },function(){});
+      db.collection('months').onSnapshot(function(snap){
+        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
+        months=m; render();
+      },function(){});
+      render();
+    }).catch(function(e){console.error(e);render()});
+  }
+})();
+</script>
+</body></html>
