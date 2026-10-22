@@ -223,7 +223,7 @@ td.mono{font-family:var(--mono);font-size:13px}
   }
 
   var $=function(id){return document.getElementById(id)};
-  var store={}, db=null, canWrite=true, tab='dash', teamFilter=ONLY||'all', synced=false, selected=null, writing={}, collapsed={}, lang='en', isAdmin=false, extras={}, months={}, dl=null, selMonth=null;
+  var store={}, db=null, canWrite=true, tab='dash', teamFilter=ONLY||'all', synced=false, selected=null, writing={}, collapsed={}, lang='en', isAdmin=false, who=null, unsubs=[], extras={}, months={}, dl=null, selMonth=null;
   try{lang=localStorage.getItem('kpi-lang')||'en'}catch(e){}
   if(['en','ar'].indexOf(lang)<0) lang='en';
   function L(en,ar){return lang==='en'?en:lang==='ar'?ar:en+' · '+ar}
@@ -320,10 +320,12 @@ td.mono{font-family:var(--mono);font-size:13px}
   }
 
   function chips(){
-    if(ONLY) return '';
     var h='<div class="chips" role="group" aria-label="Team">';
-    [{id:'all',en:'All teams',ar:'كل التيمات'}].concat(TEAMS).forEach(function(t){
-      h+='<button class="chip" data-team="'+t.id+'" aria-pressed="'+(teamFilter===t.id)+'">'+tn(t)+'</button>';
+    var list=[{id:'all',en:'All teams',ar:'كل التيمات'}].concat(TEAMS);
+    if(who&&who.team) list=list.filter(function(t){return t.id===who.team});
+    list.forEach(function(t){
+      var ok=who&&(who.admin||who.team===t.id);
+      h+='<button class="chip" data-team="'+t.id+'" aria-pressed="'+(ok&&teamFilter===t.id)+'">'+(ok?'':'🔒 ')+tn(t)+'</button>';
     });
     return h+'</div>';
   }
@@ -482,6 +484,8 @@ td.mono{font-family:var(--mono);font-size:13px}
           '<button class="btn alt" data-pdel="'+esc(key)+'">'+esc(confP===key?L('Confirm removal','تأكيد الحذف'):L('Remove','حذف'))+'</button>')+'</div>';
       });
     });
+    h+='</div></section><section class="panel"><header><h2>'+esc(L('Team logins','دخول التيمات'))+'</h2><span class="sub">'+esc(L('Create one user per team in Firebase Authentication with this email and a password of your choice.','اعمل مستخدم لكل تيم في Firebase Authentication بالإيميل ده وباسورد من اختيارك.'))+'</span></header><div class="rolelist">';
+    TEAMS.forEach(function(t){h+='<div><b>'+tn(t)+'</b><span class="pill na mono">'+esc(t.id.toLowerCase()+'@team.kpi')+'</span></div>'});
     h+='</div></section><section class="panel"><header><h2>'+esc(L('Default tasks','المهام الأساسية'))+'</h2><span class="sub">'+esc(L('Built into the tracker. Ask Claude to change them.','جوّه الصفحة. اطلب من Claude يغيّرها.'))+'</span></header><div class="rolelist">';
     Object.keys(TASKS).forEach(function(r){
       h+='<div><b>'+esc(L(ROLE[r][0],ROLE[r][1]))+'</b>'+TASKS[r].map(function(t){return '<span class="pill na" dir="auto">'+esc(L(t[0],t[1]))+'</span>'}).join('')+'</div>';
@@ -583,13 +587,14 @@ td.mono{font-family:var(--mono);font-size:13px}
     $('lg2').textContent=L('Green ≥ ','أخضر ≥ ')+Math.round(TARGET*100)+'% · '+L('Amber ≥ ','أصفر ≥ ')+Math.round(ALERT*100)+'% · '+L('Red below','أحمر أقل');
     $('day').value=selected; $('day').min=START; $('day').max=TODAY;
     $('prev').disabled=selected<=START; $('next').disabled=selected>=TODAY; $('today').disabled=selected===TODAY;
-    if(tab==='admin'&&!isAdmin) tab='dash';
+    if((tab==='admin'||tab==='reports')&&!isAdmin) tab='dash';
     $('tab-reports').textContent=L('Reports & export','التقارير والتصدير');
-    $('tab-admin').textContent=L('Manage tasks','إدارة المهام'); $('tab-admin').hidden=!isAdmin;
+    $('tab-admin').textContent=L('Manage tasks','إدارة المهام'); $('tab-admin').hidden=!isAdmin; $('tab-reports').hidden=!isAdmin;
+    var gate=!!db&&!who; $('tab-dash').hidden=gate; $('tab-check').hidden=gate; if(gate){$('tab-admin').hidden=true;$('tab-reports').hidden=true}
     ['dash','check','reports','admin'].forEach(function(k){$('tab-'+k).setAttribute('aria-pressed',tab===k)});
     var ae=document.activeElement, fid=(ae&&ae.id&&$('view').contains(ae))?ae.id:null, ss=null, se=null;
     if(fid&&ae.selectionStart!=null){ss=ae.selectionStart;se=ae.selectionEnd}
-    $('view').innerHTML = ({dash:dash,check:check,reports:reports,admin:admin})[tab]();
+    $('view').innerHTML = gate? loginPanel() : ({dash:dash,check:check,reports:reports,admin:admin})[tab]();
     if(fid){var fe=$(fid); if(fe){fe.focus(); try{if(ss!=null)fe.setSelectionRange(ss,se)}catch(e){}}}
     $('status').textContent = db? (synced?L('Live · shared with the team','مباشر · مشترك مع الفريق'):L('Loading saved data…','جاري تحميل البيانات…')) : L('Offline view · changes are not saved','عرض بدون اتصال · التغييرات مش بتتحفظ');
     $('notice').innerHTML = (db&&!canWrite)?'<div class="note">'+esc(L('You can view this tracker but not edit it. Ask the owner for Contributor access.','تقدر تشوف الصفحة بس مش تعدّل. اطلب صلاحية Contributor من صاحب الصفحة.'))+'</div>':
@@ -603,7 +608,7 @@ td.mono{font-family:var(--mono);font-size:13px}
     var ref=db.doc('days/'+docId);
     queue(docId,function(){
       return ref.get().then(function(s){
-        var body={c:{}}; body.c[key]=v;
+        var body={c:{},team:docId.split('_')[1]}; body.c[key]=v;
         return ref.set(body,{merge:true});
       });
     });
@@ -617,7 +622,13 @@ td.mono{font-family:var(--mono);font-size:13px}
 
   $('view').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b) return;
-    if(b.dataset.team){teamFilter=b.dataset.team;render();return}
+    if(b.dataset.team){
+      var tid=b.dataset.team;
+      if(who&&(who.admin||who.team===tid)){teamFilter=tid;render();return}
+      if(!who&&tid==='all'){adminLogin();return}
+      if(!who&&tid!=='all'){teamLogin(tid)}
+      return;
+    }
     if(b.dataset.fold){collapsed[b.dataset.fold]=!collapsed[b.dataset.fold];render();return}
     var mm=selMonth||TODAY.slice(0,7);
     if(b.dataset.export){if(dl)exportMonth(mm);return}
@@ -675,7 +686,7 @@ td.mono{font-family:var(--mono);font-size:13px}
     var pid=f.dataset.gform, d=drafts[pid]||{ar:'',en:''}, ar=d.ar.trim(), en=d.en.trim();
     if((!ar&&!en)||!db||!canWrite) return;
     drafts[pid]={ar:'',en:''}; render();
-    queue('gnew',function(){return db.collection('gaps').add({pid:pid,ar:ar,en:en,done:false,d:TODAY,c:Date.now()})});
+    queue('gnew',function(){return db.collection('gaps').add({team:(PEOPLE.filter(function(x){return x.id===pid})[0]||{}).team||null,pid:pid,ar:ar,en:en,done:false,d:TODAY,c:Date.now()})});
   });
   $('view').addEventListener('change',function(e){
     var t=e.target; if(t.id==='mon'&&t.value){selMonth=t.value;confApprove=false;render()}
@@ -695,45 +706,59 @@ td.mono{font-family:var(--mono);font-size:13px}
 
   var FBCFG={apiKey:"AIzaSyB5wMhA8mN9gr-tmb3bqKJi-WkptrHvq8k",authDomain:"team-kpi-tracker-30bd0.firebaseapp.com",projectId:"team-kpi-tracker-30bd0",storageBucket:"team-kpi-tracker-30bd0.firebasestorage.app",messagingSenderId:"963123858248",appId:"1:963123858248:web:03d6a1e8bc8ee71151c17d"};
   var fbAuth=null;
-  function setAdm(){var b=$('adm'); if(b) b.textContent=isAdmin?L('Sign out','تسجيل خروج'):L('Admin sign-in','دخول الإدارة')}
-  $('adm').onclick=function(){
+  function setAdm(){var b=$('adm'); if(b) b.textContent=who?L('Sign out','تسجيل خروج'):L('Admin sign-in','دخول الإدارة')}
+  function loginPanel(){
+    return chips()+'<section class="panel"><header><h2>'+esc(L('Sign in','تسجيل الدخول'))+'</h2></header><div class="vacant">'+
+      esc(L('Choose your team above and enter its password. Management: use Admin sign-in.','اختار تيمك من فوق واكتب الباسورد بتاعه. الإدارة: دخول الإدارة.'))+'</div></section>';
+  }
+  function signErr(){$('notice').innerHTML='<div class="note">'+esc(L('Wrong password or email.','الباسورد أو الإيميل غلط.'))+'</div>'}
+  function teamLogin(tid){
     if(!fbAuth) return;
-    if(isAdmin){fbAuth.signOut();return}
+    var pw=window.prompt(L('Password for this team','باسورد التيم ده')); if(!pw) return;
+    fbAuth.signInWithEmailAndPassword(tid.toLowerCase()+'@team.kpi',pw).catch(signErr);
+  }
+  function adminLogin(){
+    if(!fbAuth) return;
     var em=window.prompt(L('Admin email','إيميل الإدارة')); if(!em) return;
     var pw=window.prompt(L('Password','الباسورد')); if(!pw) return;
-    fbAuth.signInWithEmailAndPassword(em.trim(),pw).catch(function(){$('notice').innerHTML='<div class="note">'+esc(L('Wrong email or password.','الإيميل أو الباسورد غلط.'))+'</div>'});
-  };
+    fbAuth.signInWithEmailAndPassword(em.trim(),pw).catch(signErr);
+  }
+  $('adm').onclick=function(){ if(!fbAuth) return; if(who){fbAuth.signOut();return} adminLogin(); };
+  function unsub(){unsubs.forEach(function(f){try{f()}catch(e){}}); unsubs=[]}
+  function subscribe(){
+    var lim=who&&who.team;
+    var qd=lim?db.collection('days').where('team','==',who.team):db.collection('days');
+    var qg=lim?db.collection('gaps').where('team','==',who.team):db.collection('gaps');
+    unsubs.push(qd.onSnapshot(function(snap){
+      var m={}; snap.docs.forEach(function(d){var x=d.data();m[d.id]=(x&&x.c)||{};
+        if(who&&who.admin&&x&&!x.team){db.doc('days/'+d.id).set({team:d.id.split('_')[1]},{merge:true}).catch(function(){})}});
+      store=m; synced=true; render();
+    },function(){synced=false;render()}));
+    unsubs.push(qg.onSnapshot(function(snap){
+      var m={}; snap.docs.forEach(function(d){var x=d.data()||{};m[d.id]=x;
+        if(who&&who.admin&&!x.team){var pp=PEOPLE.filter(function(q){return q.id===x.pid})[0]; if(pp) db.doc('gaps/'+d.id).update({team:pp.team}).catch(function(){})}});
+      gaps=m; render();
+    },function(){}));
+    [['extra',function(m){extras=m}],['months',function(m){months=m}],
+     ['teams',function(m){teamDocs=m;rebuildTeams();rebuild()}],['staff',function(m){staff=m;rebuild()}]].forEach(function(c){
+      unsubs.push(db.collection(c[0]).onSnapshot(function(snap){
+        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}}); c[1](m); render();
+      },function(){}));
+    });
+  }
   if(window.firebase){
     Promise.resolve().then(function(){
       firebase.initializeApp(FBCFG);
       db=firebase.firestore(); fbAuth=firebase.auth();
       dl={save:function(o){return new Promise(function(res){var u=URL.createObjectURL(o.data),a=document.createElement('a');a.href=u;a.download=o.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);res({status:'saved'})})}};
-      fbAuth.onAuthStateChanged(function(u){isAdmin=!!u;if(!u&&(tab==='admin')) tab='dash';render()});
-      if(!db){render();return}
-      db.collection('days').onSnapshot(function(snap){
-        var m={}; snap.docs.forEach(function(d){var x=d.data();m[d.id]=(x&&x.c)||{}});
-        store=m; synced=true; render();
-      },function(){synced=false;render()});
-      db.collection('gaps').onSnapshot(function(snap){
-        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
-        gaps=m; render();
-      },function(){});
-      db.collection('extra').onSnapshot(function(snap){
-        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
-        extras=m; render();
-      },function(){});
-      db.collection('teams').onSnapshot(function(snap){
-        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
-        teamDocs=m; rebuildTeams(); rebuild(); render();
-      },function(){});
-      db.collection('staff').onSnapshot(function(snap){
-        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
-        staff=m; rebuild(); render();
-      },function(){});
-      db.collection('months').onSnapshot(function(snap){
-        var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
-        months=m; render();
-      },function(){});
+      fbAuth.onAuthStateChanged(function(u){
+        unsub(); store={};gaps={};extras={};months={};staff={};teamDocs={};synced=false; rebuildTeams(); rebuild();
+        if(!u){who=null;isAdmin=false;teamFilter='all';render();return}
+        var em=(u.email||'').toLowerCase();
+        if(/@team\.kpi$/.test(em)){who={team:em.split('@')[0]};isAdmin=false;teamFilter=who.team;if(tab==='admin'||tab==='reports')tab='dash'}
+        else{who={admin:true};isAdmin=true;teamFilter='all'}
+        subscribe(); render();
+      });
       render();
     }).catch(function(e){console.error(e);render()});
   }
