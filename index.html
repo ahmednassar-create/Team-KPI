@@ -144,6 +144,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
 .bar .id{flex-direction:row;align-items:center;gap:14px}
 .bar .idt{display:flex;flex-direction:column;gap:2px;min-width:0}
 .subnav{align-self:flex-start}
+.offbar{display:flex;gap:10px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .logo{height:34px;width:auto;flex:none;display:block}
 @media (prefers-reduced-motion:no-preference){.logo{animation:blink 2.4s ease-in-out infinite}}
 @keyframes blink{0%,100%{opacity:1;filter:drop-shadow(0 0 0 rgba(224,0,16,0))}50%{opacity:.3;filter:drop-shadow(0 0 9px rgba(224,0,16,.75))}}
@@ -285,8 +286,16 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     return base;
   }
   function activeOn(t,d){return d>=t.from&&(!t.to||d<=t.to)}
+  var offs={};
+  function offOf(p,d){return offs[d+'_'+p.id]||null}
+  function offLabel(t){return t==='leave'?L('On leave','إجازة'):L('Absent','غياب')}
+  function offBar(p){
+    var c=offOf(p,selected), dis=(canWrite&&!locked(selected))?'':' disabled';
+    return '<div class="offbar"><span class="sub">'+esc(L('Status today','الحالة النهاردة'))+'</span><span class="seg" role="group">'+[['none',L('Present','حاضر')],['leave',L('Leave','إجازة')],['absent',L('Absent','غياب')]].map(function(o){return '<button data-off="'+p.id+':'+o[0]+'" aria-pressed="'+((c||'none')===o[0])+'"'+dis+'>'+esc(o[1])+'</button>'}).join('')+'</span></div>';
+  }
+  function isFri(d){return new Date(d+'T00:00:00Z').getUTCDay()===5}
   function val(date,p,k){
-    if(p.vacant||!onDuty(p,date)) return 'n';
+    if(p.vacant||!onDuty(p,date)||isFri(date)||offs[date+'_'+p.id]) return 'n';
     var c=store[date+'_'+p.team]; return c? c[p.id+'-'+k] : undefined;
   }
   function compute(asof,from){
@@ -401,7 +410,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
       h+='<section class="panel" style="--tc:'+teamColor(t.id)+'">'+teamHeader(t,rs,false)+'<div class="scroll"><table><thead><tr><th>'+esc(L('Employee','الموظف'))+'</th><th class="n">'+esc(L('Day done','اتعمل اليوم'))+'</th><th>'+esc(L('Day %','نسبة اليوم'))+'</th><th>'+esc(L('To-date %','نسبة التراكمي'))+'</th><th>'+esc(L('Status','الحالة'))+'</th><th class="n">'+esc(L('Open gaps','التقصير'))+'</th></tr></thead><tbody>';
       rs.forEach(function(r){
         var p=r.p, x=pct(r.dd,r.da);
-        h+='<tr><td><div class="who"><b>'+pn(p)+'</b><span>'+rn(p.role)+'</span></div></td><td class="n mono">'+r.dd+' / '+r.da+'</td><td>'+meter(x)+'</td><td>'+meter(pct(r.td,r.ta))+'</td><td>'+(p.vacant?'<span class="pill na">'+esc(L('Vacant','شاغر'))+'</span>':pill(x))+'</td><td class="n mono">'+(p.vacant?'—':openCount(p.id))+'</td></tr>';
+        h+='<tr><td><div class="who"><b>'+pn(p)+'</b><span>'+rn(p.role)+'</span></div></td><td class="n mono">'+r.dd+' / '+r.da+'</td><td>'+meter(x)+'</td><td>'+meter(pct(r.td,r.ta))+'</td><td>'+(p.vacant?'<span class="pill na">'+esc(L('Vacant','شاغر'))+'</span>':(offOf(p,selected)?'<span class="pill warn">'+esc(offLabel(offOf(p,selected)))+'</span>':pill(x)))+'</td><td class="n mono">'+(p.vacant?'—':openCount(p.id))+'</td></tr>';
       });
       h+='</tbody></table></div></section>';
     });
@@ -418,7 +427,10 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
         rs.forEach(function(r){
           var p=r.p;
           h+='<section class="card"><header><div class="who"><b>'+pn(p)+'</b><span>'+rn(p.role)+'</span></div>'+(p.vacant?'<span class="pill na">'+esc(L('Vacant','شاغر'))+'</span>':meter(pct(r.dd,r.da)))+'</header>';
+          if(isAdmin&&!p.vacant&&!isFri(selected)) h+=offBar(p);
           if(p.vacant){h+='<div class="vacant">'+esc(L('No one assigned yet.','مفيش حد متعيّن لسه.'))+'</div>'}
+          else if(isFri(selected)){h+='<div class="vacant">'+esc(L('Friday · official day off. No tasks required.','الجمعة · إجازة رسمية. مفيش مهام مطلوبة.'))+'</div>'}
+          else if(offOf(p,selected)){h+='<div class="vacant">'+esc(offLabel(offOf(p,selected)))+' · '+esc(L('Not counted in the KPI.','مش محسوبة في الـ KPI.'))+'</div>'}
           else tasksOf(p).filter(function(t){return activeOn(t,selected)}).forEach(function(t){
             var v=val(selected,p,t.k), dis=(canWrite&&!locked(selected))?'':' disabled', nm=esc(L(t.en||t.ar,t.ar||t.en));
             h+='<div class="task"><span class="name">'+taskHTML([t.en||t.ar,t.ar||t.en])+'</span><span class="tri" role="group" aria-label="'+nm+'">'+
@@ -461,7 +473,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
   }
   function reports(){
     var m=selMonth||TODAY.slice(0,7), md=monthData(m), rows=md.rows, tdn=sum(rows,'td'), tan=sum(rows,'ta'), x=pct(tdn,tan);
-    var inProg=md.r.end>TODAY, canExp=!!dl&&(isAdmin||md.approved), ndays=md.r.from>md.r.to?0:span(md.r.from,md.r.to).length;
+    var inProg=md.r.end>TODAY, canExp=!!dl&&(isAdmin||md.approved), ndays=md.r.from>md.r.to?0:span(md.r.from,md.r.to).filter(function(d){return !isFri(d)}).length;
     var st=md.approved?'<span class="pill ok">'+esc(L('Approved','معتمد'))+'</span>':'<span class="pill warn">'+esc(inProg?L('Open · month in progress','مفتوح · الشهر شغّال'):L('Open · not approved','مفتوح · غير معتمد'))+'</span>';
     var h='<section class="panel"><header class="rhead"><div><h2>'+esc(monthLabel(m))+'</h2><span class="sub">'+esc(md.r.from)+' → '+esc(md.r.to)+'</span></div>'+
       '<div class="ctrls"><input id="mon" type="month" min="'+START.slice(0,7)+'" max="'+TODAY.slice(0,7)+'" value="'+esc(m)+'" aria-label="Month">'+st+'</div></header><div class="gl">'+
@@ -575,12 +587,13 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
   function exportMonth(m){
     if(typeof XLSX==='undefined'){$('notice').innerHTML='<div class="note">'+esc(L('The Excel export library did not load. Reload the page.','مكتبة التصدير ما اتحمّلتش. حدّث الصفحة.'))+'</div>';return}
     var md=monthData(m), rows=md.rows, wb=XLSX.utils.book_new(), n=rows.length, last=n+1;
-    var S=[['Month','Team','Employee','الموظف','Role','Done','Applicable','Completion %','Open shortfalls (now)','Status']];
+    function offCount(p,ty,r){var n=0; if(r.from>r.to) return 0; span(r.from,r.to).forEach(function(d){if(!isFri(d)&&offs[d+'_'+p.id]===ty) n++}); return n}
+    var S=[['Month','Team','Employee','الموظف','Role','Done','Applicable','Completion %','Open shortfalls (now)','Status','Leave days','Absent days']];
     rows.forEach(function(r,i){
       var p=r.p, k=i+2;
       S.push([m,teamOf(p.team).en,p.name,p.ar,ROLE[p.role][0],r.td,r.ta,
         {t:'n',f:'IF(G'+k+'=0,"",F'+k+'/G'+k+')',z:'0%'}, p.vacant?0:openCount(p.id),
-        {t:'s',f:'IF(H'+k+'="","—",IF(H'+k+'>='+TARGET+',"On target",IF(H'+k+'>='+ALERT+',"In progress","Below alert")))'}]);
+        {t:'s',f:'IF(H'+k+'="","—",IF(H'+k+'>='+TARGET+',"On target",IF(H'+k+'>='+ALERT+',"In progress","Below alert")))'},offCount(p,'leave',md.r),offCount(p,'absent',md.r)]);
     });
     S.push(['','All teams','','','',{t:'n',f:'SUM(F2:F'+last+')'},{t:'n',f:'SUM(G2:G'+last+')'},{t:'n',f:'IF(G'+(last+1)+'=0,"",F'+(last+1)+'/G'+(last+1)+')',z:'0%'},{t:'n',f:'SUM(I2:I'+last+')'},'']);
     var ws=XLSX.utils.aoa_to_sheet(S); ws['!cols']=[{wch:10},{wch:12},{wch:22},{wch:18},{wch:14},{wch:8},{wch:11},{wch:13},{wch:20},{wch:14}];
@@ -594,12 +607,13 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     XLSX.utils.book_append_sheet(wb,wt,'Teams');
     var D=[['Date','Team','Employee','الموظف','Role','Task','المهمة','Status']];
     if(md.r.from<=md.r.to) span(md.r.from,md.r.to).forEach(function(d){
+      if(isFri(d)) return;
       PEOPLE.forEach(function(p){
         if(p.vacant) return;
         tasksOf(p).forEach(function(t){
           if(!activeOn(t,d)) return;
           var v=val(d,p,t.k);
-          D.push([d,teamOf(p.team).en,p.name,p.ar,ROLE[p.role][0],t.en||t.ar,t.ar||t.en,v==='d'?'Done':v==='m'?'Not done':v==='n'?'N/A':'Not reported']);
+          D.push([d,teamOf(p.team).en,p.name,p.ar,ROLE[p.role][0],t.en||t.ar,t.ar||t.en,offs[d+'_'+p.id]?(offs[d+'_'+p.id]==='leave'?'On leave':'Absent'):v==='d'?'Done':v==='m'?'Not done':v==='n'?'N/A':'Not reported']);
         });
       });
     });
@@ -661,6 +675,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     $('status').textContent = db? (synced?L('Live · shared with the team','مباشر · مشترك مع الفريق'):L('Loading saved data…','جاري تحميل البيانات…')) : L('Offline view · changes are not saved','عرض بدون اتصال · التغييرات مش بتتحفظ');
     $('notice').innerHTML = (db&&!canWrite)?'<div class="note">'+esc(L('You can view this tracker but not edit it. Ask the owner for Contributor access.','تقدر تشوف الصفحة بس مش تعدّل. اطلب صلاحية Contributor من صاحب الصفحة.'))+'</div>':
       (!db?'<div class="note">'+esc(L('Shared saving is unavailable in this view. Open the artifact link while signed in.','الحفظ المشترك مش متاح هنا. افتح اللينك وانت مسجّل دخول.'))+'</div>':'');
+    if((tab==='dash'||tab==='check')&&isFri(selected)) $('notice').innerHTML+='<div class="note">'+esc(L('Friday is an official day off. No tasks are required and it is not counted.','الجمعة إجازة رسمية. مفيش مهام مطلوبة ومش محسوبة.'))+'</div>';
     if(tab==='check'&&locked(selected)) $('notice').innerHTML+='<div class="note">'+esc(L('This month is approved and locked. The owner can reopen it from Reports.','الشهر ده معتمد ومقفول. صاحب الصفحة يقدر يفتحه من التقارير.'))+'</div>';
   }
 
@@ -682,6 +697,15 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
 
   $('view').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b) return;
+    if(b.dataset.off){
+      if(!db||!isAdmin||!canWrite||locked(selected)) return;
+      var op=b.dataset.off.split(':'), opid=op[0], oty=op[1], oper=PEOPLE.filter(function(q){return q.id===opid})[0]; if(!oper) return;
+      var okey=selected+'_'+opid, osel=selected;
+      if(oty==='none') delete offs[okey]; else offs[okey]=oty;
+      render();
+      queue('o'+okey,function(){return oty==='none'?db.doc('off/'+okey).delete():db.doc('off/'+okey).set({pid:opid,team:oper.team,date:osel,type:oty})});
+      return;
+    }
     if(b.dataset.asub){adminSub=b.dataset.asub;render();return}
     if(b.dataset.team){
       var tid=b.dataset.team;
@@ -802,6 +826,11 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
         if(who&&who.admin&&x&&!x.team){db.doc('days/'+d.id).set({team:d.id.split('_')[1]},{merge:true}).catch(function(){})}});
       store=m; synced=true; render();
     },function(){synced=false;render()}));
+    var qo=lim?db.collection('off').where('team','==',who.team):db.collection('off');
+    unsubs.push(qo.onSnapshot(function(snap){
+      var m={}; snap.docs.forEach(function(d){var x=d.data()||{}; if(x.type) m[d.id]=x.type});
+      offs=m; render();
+    },function(){}));
     unsubs.push(qg.onSnapshot(function(snap){
       var m={}; snap.docs.forEach(function(d){var x=d.data()||{};m[d.id]=x;
         if(who&&who.admin&&!x.team){var pp=PEOPLE.filter(function(q){return q.id===x.pid})[0]; if(pp) db.doc('gaps/'+d.id).update({team:pp.team}).catch(function(){})}});
@@ -826,7 +855,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
         render();
       },function(){});
       fbAuth.onAuthStateChanged(function(u){
-        unsub(); store={};gaps={};extras={};months={};staff={};synced=false; rebuildTeams(); rebuild();
+        unsub(); store={};gaps={};offs={};extras={};months={};staff={};synced=false; rebuildTeams(); rebuild();
         if(!u){who=null;isAdmin=false;teamFilter='all';render();return}
         var em=(u.email||'').toLowerCase();
         if(/@team\.kpi$/.test(em)){who={tl:em.split('@')[0],team:null};isAdmin=false;teamFilter='all';resolveWho();if(tab==='admin'||tab==='reports')tab='dash'}
