@@ -724,6 +724,11 @@ td.mono{font-family:var(--mono);font-size:13px}
     fbAuth.signInWithEmailAndPassword(em.trim(),pw).catch(signErr);
   }
   $('adm').onclick=function(){ if(!fbAuth) return; if(who){fbAuth.signOut();return} adminLogin(); };
+  function resolveWho(){
+    if(!who||!who.tl) return;
+    var t=TEAMS.filter(function(x){return x.id.toLowerCase()===who.tl})[0];
+    if(t){who.team=t.id; teamFilter=t.id}
+  }
   function unsub(){unsubs.forEach(function(f){try{f()}catch(e){}}); unsubs=[]}
   function subscribe(){
     var lim=who&&who.team;
@@ -753,15 +758,17 @@ td.mono{font-family:var(--mono);font-size:13px}
       dl={save:function(o){return new Promise(function(res){var u=URL.createObjectURL(o.data),a=document.createElement('a');a.href=u;a.download=o.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);res({status:'saved'})})}};
       db.collection('teams').onSnapshot(function(snap){
         var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}});
-        teamDocs=m; rebuildTeams(); rebuild(); render();
+        teamDocs=m; rebuildTeams(); rebuild();
+        if(who&&who.tl&&!who.team){resolveWho(); if(who.team){unsub(); subscribe()}}
+        render();
       },function(){});
       fbAuth.onAuthStateChanged(function(u){
         unsub(); store={};gaps={};extras={};months={};staff={};synced=false; rebuildTeams(); rebuild();
         if(!u){who=null;isAdmin=false;teamFilter='all';render();return}
         var em=(u.email||'').toLowerCase();
-        if(/@team\.kpi$/.test(em)){who={team:em.split('@')[0]};isAdmin=false;teamFilter=who.team;if(tab==='admin'||tab==='reports')tab='dash'}
+        if(/@team\.kpi$/.test(em)){who={tl:em.split('@')[0],team:null};isAdmin=false;teamFilter='all';resolveWho();if(tab==='admin'||tab==='reports')tab='dash'}
         else{who={admin:true};isAdmin=true;teamFilter='all'}
-        subscribe(); render();
+        if(who.admin||who.team) subscribe(); render();
       });
       render();
     }).catch(function(e){console.error(e);render()});
