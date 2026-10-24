@@ -143,6 +143,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
 .bar{background:transparent!important;border-bottom-color:transparent!important;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .bar .id{flex-direction:row;align-items:center;gap:14px}
 .bar .idt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.subnav{align-self:flex-start}
 .logo{height:34px;width:auto;flex:none;display:block}
 @media (prefers-reduced-motion:no-preference){.logo{animation:blink 2.4s ease-in-out infinite}}
 @keyframes blink{0%,100%{opacity:1;filter:drop-shadow(0 0 0 rgba(224,0,16,0))}50%{opacity:.3;filter:drop-shadow(0 0 9px rgba(224,0,16,.75))}}
@@ -324,7 +325,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
   function openIn(teamId){return gapList().filter(function(g){
     if(g.done) return false; var p=PEOPLE.filter(function(x){return x.id===g.pid})[0]; return p&&(!teamId||teamId==='all'||p.team===teamId)}).length}
   function gapText(g){return (g.ar?'<span dir="rtl" lang="ar">'+esc(g.ar)+'</span>':'')+(g.en?'<span dir="ltr" lang="en">'+esc(g.en)+'</span>':'')}
-  var rdr={};
+  var rdr={}, adminSub='tasks';
   function replyBox(g){
     var r=g.r||{}, ks=Object.keys(r).sort(), h='';
     ks.forEach(function(k){var x=r[k]||{};
@@ -490,7 +491,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
   function admin(){
     var opts='<optgroup label="'+esc(L('Whole role','دور كامل'))+'">'+Object.keys(ROLE).map(function(r){var v='role:'+r;return '<option value="'+v+'"'+(xd.target===v?' selected':'')+'>'+esc(L('All '+ROLE[r][0],'كل '+ROLE[r][1]))+'</option>'}).join('')+'</optgroup>'+
       '<optgroup label="'+esc(L('One person','موظف واحد'))+'">'+PEOPLE.filter(function(p){return !p.vacant}).map(function(p){var v='person:'+p.id;return '<option value="'+v+'"'+(xd.target===v?' selected':'')+'>'+esc(p.name+' · '+p.ar)+'</option>'}).join('')+'</optgroup>';
-    var h='<section class="panel"><header><h2>'+esc(L('Add a task','إضافة مهمة'))+'</h2><span class="sub">'+esc(L('For a whole role or one person, from the start date on. Past days are not affected.','لدور كامل أو لموظف واحد، من تاريخ البداية. الأيام اللي فاتت مش بتتأثر.'))+'</span></header>'+
+    var h='<!--S:tasks--><section class="panel"><header><h2>'+esc(L('Add a task','إضافة مهمة'))+'</h2><span class="sub">'+esc(L('For a whole role or one person, from the start date on. Past days are not affected.','لدور كامل أو لموظف واحد، من تاريخ البداية. الأيام اللي فاتت مش بتتأثر.'))+'</span></header>'+
       '<form class="aform gl" data-xform="1">'+
       '<label>'+esc(L('Task in Arabic','المهمة بالعربي'))+'<input id="xar" data-xin="ar" dir="rtl" lang="ar" value="'+esc(xd.ar)+'"></label>'+
       '<label>'+esc(L('Task in English','المهمة بالإنجليزي'))+'<input id="xen" data-xin="en" dir="ltr" lang="en" value="'+esc(xd.en)+'"></label>'+
@@ -517,7 +518,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
         h+='<section class="panel" style="--tc:'+teamColor(t.id)+'"><header class="thead"><div class="who"><h2>'+esc(L('Extra tasks','مهام إضافية'))+' · '+tn(t)+'</h2></div><span class="sub">'+tx2.length+'</span></header>'+xTable(tx2)+'</section>';
       });
     }
-    h+='<section class="panel"><header><h2>'+esc(L('Add a team','إضافة تيم'))+'</h2><span class="sub">'+esc(L('Create a new team, then add its members below.','اعمل تيم جديد وبعدين ضيف أعضاءه من تحت.'))+'</span></header>'+
+    h+='<!--S:people--><section class="panel"><header><h2>'+esc(L('Add a team','إضافة تيم'))+'</h2><span class="sub">'+esc(L('Create a new team, then add its members below.','اعمل تيم جديد وبعدين ضيف أعضاءه من تحت.'))+'</span></header>'+
       '<form class="aform gl" data-tform="1">'+
       '<label>'+esc(L('Team name in Arabic','اسم التيم بالعربي'))+'<input id="tar" data-tin="ar" dir="rtl" lang="ar" value="'+esc(td.ar)+'"></label>'+
       '<label>'+esc(L('Team name in English','اسم التيم بالإنجليزي'))+'<input id="ten" data-tin="en" dir="ltr" lang="en" value="'+esc(td.en)+'"></label>'+
@@ -541,13 +542,17 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
       });
       h+='</div></section>';
     });
-    h+='<section class="panel"><header><h2>'+esc(L('Team logins','دخول التيمات'))+'</h2><span class="sub">'+esc(L('Create one user per team in Firebase Authentication with this email and a password of your choice.','اعمل مستخدم لكل تيم في Firebase Authentication بالإيميل ده وباسورد من اختيارك.'))+'</span></header><div class="rolelist">';
+    h+='<!--S:info--><section class="panel"><header><h2>'+esc(L('Team logins','دخول التيمات'))+'</h2><span class="sub">'+esc(L('Create one user per team in Firebase Authentication with this email and a password of your choice.','اعمل مستخدم لكل تيم في Firebase Authentication بالإيميل ده وباسورد من اختيارك.'))+'</span></header><div class="rolelist">';
     TEAMS.forEach(function(t){h+='<div><b>'+tn(t)+'</b><span class="pill na mono">'+esc(t.id.toLowerCase()+'@team.kpi')+'</span></div>'});
     h+='</div></section><section class="panel"><header><h2>'+esc(L('Default tasks','المهام الأساسية'))+'</h2><span class="sub">'+esc(L('Built into the tracker. Ask Claude to change them.','جوّه الصفحة. اطلب من Claude يغيّرها.'))+'</span></header><div class="rolelist">';
     Object.keys(TASKS).forEach(function(r){
       h+='<div><b>'+esc(L(ROLE[r][0],ROLE[r][1]))+'</b>'+TASKS[r].map(function(t){return '<span class="pill na" dir="auto">'+esc(L(t[0],t[1]))+'</span>'}).join('')+'</div>';
     });
-    return h+'</div></section>';
+    h+='</div></section>';
+    var parts={}; h.split('<!--S:').slice(1).forEach(function(p){var k=p.slice(0,p.indexOf('-->')); parts[k]=p.slice(p.indexOf('-->')+3)});
+    var tabs=[['tasks',L('Tasks','المهام')],['people',L('Teams & members','التيمات والأعضاء')],['info',L('Logins & defaults','الدخول والأساسيات')]];
+    var nav='<div class="seg subnav" role="group">'+tabs.map(function(t){return '<button data-asub="'+t[0]+'" aria-pressed="'+(adminSub===t[0])+'">'+esc(t[1])+'</button>'}).join('')+'</div>';
+    return nav+(parts[adminSub]||parts.tasks);
   }
   function addExtra(){
     if(!db||!isAdmin) return;
@@ -677,6 +682,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
 
   $('view').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b) return;
+    if(b.dataset.asub){adminSub=b.dataset.asub;render();return}
     if(b.dataset.team){
       var tid=b.dataset.team;
       if(who&&(who.admin||who.team===tid)){teamFilter=tid;render();return}
