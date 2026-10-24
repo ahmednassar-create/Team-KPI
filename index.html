@@ -498,18 +498,26 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
       '<label>'+esc(L('Starts on','بتبدأ من'))+'<input id="xfrom" data-xin="from" type="date" min="'+START+'" value="'+esc(xd.from||TODAY)+'"></label>'+
       '<button class="btn" type="submit">'+esc(L('Add task','إضافة المهمة'))+'</button></form></section>';
     var list=Object.keys(extras).map(function(id){return Object.assign({id:id},extras[id])}).sort(function(a,b){return (a.c||0)-(b.c||0)});
-    h+='<section class="panel"><header><h2>'+esc(L('Extra tasks','المهام الإضافية'))+'</h2><span class="sub">'+list.length+'</span></header>';
-    if(!list.length) h+='<div class="vacant">'+esc(L('No extra tasks yet.','مفيش مهام إضافية لسه.'))+'</div>';
-    else{
-      h+='<div class="scroll"><table><thead><tr><th>'+esc(L('Task','المهمة'))+'</th><th>'+esc(L('Applies to','بتنطبق على'))+'</th><th>'+esc(L('From','من'))+'</th><th>'+esc(L('Until','لحد'))+'</th><th>'+esc(L('Status','الحالة'))+'</th><th></th></tr></thead><tbody>';
-      list.forEach(function(x){
+    function xTable(items){
+      var t='<div class="scroll"><table><thead><tr><th>'+esc(L('Task','المهمة'))+'</th><th>'+esc(L('Applies to','بتنطبق على'))+'</th><th>'+esc(L('From','من'))+'</th><th>'+esc(L('Until','لحد'))+'</th><th>'+esc(L('Status','الحالة'))+'</th><th></th></tr></thead><tbody>';
+      items.forEach(function(x){
         var stopped=x.to&&x.to<TODAY||(x.to&&x.to<(x.from||START)), sched=!stopped&&(x.from||START)>TODAY;
         var pl=stopped?'<span class="pill na">'+esc(L('Stopped','موقوفة'))+'</span>':sched?'<span class="pill warn">'+esc(L('Scheduled','مجدولة'))+'</span>':'<span class="pill ok">'+esc(L('Active','شغّالة'))+'</span>';
-        h+='<tr><td><div class="who"><b dir="auto">'+esc(x.ar||x.en)+'</b>'+(x.ar&&x.en?'<span dir="ltr">'+esc(x.en)+'</span>':'')+'</div></td><td>'+esc(tgLabel(x))+'</td><td class="mono">'+esc(x.from||START)+'</td><td class="mono">'+esc(x.to||'—')+'</td><td>'+pl+'</td><td class="n">'+(stopped?'':'<button class="btn alt" data-xstop="'+x.id+'">'+esc(confStop===x.id?L('Confirm stop','تأكيد الإيقاف'):L('Stop','إيقاف'))+'</button>')+'</td></tr>';
+        t+='<tr><td><div class="who"><b dir="auto">'+esc(x.ar||x.en)+'</b>'+(x.ar&&x.en?'<span dir="ltr">'+esc(x.en)+'</span>':'')+'</div></td><td>'+esc(tgLabel(x))+'</td><td class="mono">'+esc(x.from||START)+'</td><td class="mono">'+esc(x.to||'—')+'</td><td>'+pl+'</td><td class="n">'+(stopped?'':'<button class="btn alt" data-xstop="'+x.id+'">'+esc(confStop===x.id?L('Confirm stop','تأكيد الإيقاف'):L('Stop','إيقاف'))+'</button>')+'</td></tr>';
       });
-      h+='</tbody></table></div>';
+      return t+'</tbody></table></div>';
     }
-    h+='</section><section class="panel"><header><h2>'+esc(L('Add a team','إضافة تيم'))+'</h2><span class="sub">'+esc(L('Create a new team, then add its members below.','اعمل تيم جديد وبعدين ضيف أعضاءه من تحت.'))+'</span></header>'+
+    function xTeam(x){ if(x.scope!=='person') return 'all'; var p=PEOPLE.filter(function(q){return q.id===x.target})[0]; return p?p.team:'all'; }
+    if(!list.length) h+='<section class="panel"><header><h2>'+esc(L('Extra tasks','المهام الإضافية'))+'</h2><span class="sub">0</span></header><div class="vacant">'+esc(L('No extra tasks yet.','مفيش مهام إضافية لسه.'))+'</div></section>';
+    else{
+      var allx=list.filter(function(x){return xTeam(x)==='all'});
+      if(allx.length) h+='<section class="panel"><header><h2>'+esc(L('Extra tasks · all teams','مهام إضافية · كل التيمات'))+'</h2><span class="sub">'+allx.length+'</span></header>'+xTable(allx)+'</section>';
+      TEAMS.forEach(function(t){
+        var tx2=list.filter(function(x){return xTeam(x)===t.id}); if(!tx2.length) return;
+        h+='<section class="panel" style="--tc:'+teamColor(t.id)+'"><header class="thead"><div class="who"><h2>'+esc(L('Extra tasks','مهام إضافية'))+' · '+tn(t)+'</h2></div><span class="sub">'+tx2.length+'</span></header>'+xTable(tx2)+'</section>';
+      });
+    }
+    h+='<section class="panel"><header><h2>'+esc(L('Add a team','إضافة تيم'))+'</h2><span class="sub">'+esc(L('Create a new team, then add its members below.','اعمل تيم جديد وبعدين ضيف أعضاءه من تحت.'))+'</span></header>'+
       '<form class="aform gl" data-tform="1">'+
       '<label>'+esc(L('Team name in Arabic','اسم التيم بالعربي'))+'<input id="tar" data-tin="ar" dir="rtl" lang="ar" value="'+esc(td.ar)+'"></label>'+
       '<label>'+esc(L('Team name in English','اسم التيم بالإنجليزي'))+'<input id="ten" data-tin="en" dir="ltr" lang="en" value="'+esc(td.en)+'"></label>'+
@@ -522,17 +530,18 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
       '<label>'+esc(L('Role','الدور'))+'<select id="prole" data-pin="role">'+Object.keys(ROLE).map(function(r){return '<option value="'+r+'"'+(pd.role===r?' selected':'')+'>'+esc(L(ROLE[r][0],ROLE[r][1]))+'</option>'}).join('')+'</select></label>'+
       '<label>'+esc(L('Starts on','بيبدأ من'))+'<input id="pfrom" data-pin="from" type="date" min="'+START+'" value="'+esc(pd.from||TODAY)+'"></label>'+
       '<button class="btn" type="submit">'+esc(L('Add member','إضافة الموظف'))+'</button></form></section>';
-    h+='<section class="panel"><header><h2>'+esc(L('Team members','أعضاء التيمات'))+'</h2><span class="sub">'+esc(L('Removing keeps their past records and stops counting them from today.','الحذف بيحتفظ بسجلهم السابق وبيوقف حسابهم من النهاردة.'))+'</span></header><div class="rolelist">';
     TEAMS.forEach(function(t){
       var ps=PEOPLE.filter(function(p){return p.team===t.id&&!p.vacant});
-      h+='<div><b>'+tn(t)+'</b>'+(ps.length?'':'<span class="sub">—</span>')+'</div>';
+      h+='<section class="panel" style="--tc:'+teamColor(t.id)+'"><header class="thead"><div class="who"><h2>'+tn(t)+'</h2><span>'+esc(L('Team members','أعضاء التيم'))+' · '+ps.length+'</span></div></header><div class="rolelist">';
+      if(!ps.length) h+='<div><span class="sub">—</span></div>';
       ps.forEach(function(p){
         var off=p.to&&p.to<TODAY, key=p.added?p.sid:p.id;
         h+='<div><span>'+pn(p)+'</span><span class="pill na">'+rn(p.role)+'</span>'+(off?'<span class="pill warn">'+esc(L('Removed','محذوف'))+' · '+esc(p.to)+'</span><button class="btn alt" data-prest="'+esc(key)+'">'+esc(L('Reinstate','إرجاع'))+'</button>':
           '<button class="btn alt" data-pdel="'+esc(key)+'">'+esc(confP===key?L('Confirm removal','تأكيد الحذف'):L('Remove','حذف'))+'</button>')+'</div>';
       });
+      h+='</div></section>';
     });
-    h+='</div></section><section class="panel"><header><h2>'+esc(L('Team logins','دخول التيمات'))+'</h2><span class="sub">'+esc(L('Create one user per team in Firebase Authentication with this email and a password of your choice.','اعمل مستخدم لكل تيم في Firebase Authentication بالإيميل ده وباسورد من اختيارك.'))+'</span></header><div class="rolelist">';
+    h+='<section class="panel"><header><h2>'+esc(L('Team logins','دخول التيمات'))+'</h2><span class="sub">'+esc(L('Create one user per team in Firebase Authentication with this email and a password of your choice.','اعمل مستخدم لكل تيم في Firebase Authentication بالإيميل ده وباسورد من اختيارك.'))+'</span></header><div class="rolelist">';
     TEAMS.forEach(function(t){h+='<div><b>'+tn(t)+'</b><span class="pill na mono">'+esc(t.id.toLowerCase()+'@team.kpi')+'</span></div>'});
     h+='</div></section><section class="panel"><header><h2>'+esc(L('Default tasks','المهام الأساسية'))+'</h2><span class="sub">'+esc(L('Built into the tracker. Ask Claude to change them.','جوّه الصفحة. اطلب من Claude يغيّرها.'))+'</span></header><div class="rolelist">';
     Object.keys(TASKS).forEach(function(r){
