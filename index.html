@@ -117,6 +117,13 @@ td.mono{font-family:var(--mono);font-size:13px}
 .gform input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:100%;min-width:0}
 .gform button{align-self:flex-start;font:inherit;font-weight:600;color:var(--accent-ink);background:var(--accent);border:0;border-radius:8px;padding:7px 14px;cursor:pointer}
 .gform button:disabled,.gform input:disabled{opacity:.5;cursor:default}
+.rp{margin-top:6px;padding:6px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--line);font-size:13px;display:flex;flex-direction:column;gap:2px}
+.rp.a{border-inline-start:3px solid var(--accent)}
+.rp b{font-size:12px;color:var(--muted)}
+.rp small{color:var(--muted)}
+.rform{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.rform input{flex:1;min-width:140px;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.rform button{font:inherit;font-weight:600;color:var(--accent-ink);background:var(--accent);border:0;border-radius:8px;padding:6px 14px;cursor:pointer}
 .gl{display:flex;flex-direction:column;gap:8px;padding:12px 16px}
 .btn{font:inherit;font-weight:600;color:var(--accent-ink);background:var(--accent);border:0;border-radius:8px;padding:8px 16px;cursor:pointer}
 .btn.alt{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
@@ -292,16 +299,32 @@ td.mono{font-family:var(--mono);font-size:13px}
   function openIn(teamId){return gapList().filter(function(g){
     if(g.done) return false; var p=PEOPLE.filter(function(x){return x.id===g.pid})[0]; return p&&(!teamId||teamId==='all'||p.team===teamId)}).length}
   function gapText(g){return (g.ar?'<span dir="rtl" lang="ar">'+esc(g.ar)+'</span>':'')+(g.en?'<span dir="ltr" lang="en">'+esc(g.en)+'</span>':'')}
+  var rdr={};
+  function replyBox(g){
+    var r=g.r||{}, ks=Object.keys(r).sort(), h='';
+    ks.forEach(function(k){var x=r[k]||{};
+      h+='<div class="rp'+(x.w==='a'?' a':'')+'"><b>'+esc(x.w==='a'?L('Manager','المدير'):L('Employee','الموظف'))+'</b><span dir="auto">'+esc(x.t||'')+'</span><small>'+esc(String(x.at||'').slice(0,16).replace('T',' '))+'</small></div>';
+    });
+    if(who) h+='<form class="rform" data-rform="'+g.id+'"><input id="rin-'+g.id+'" data-rin="'+g.id+'" dir="auto" maxlength="500" placeholder="'+esc(L('Write a reply…','اكتب ردك…'))+'" value="'+esc(rdr[g.id]||'')+'"><button type="submit">'+esc(L('Reply','رد'))+'</button></form>';
+    return h;
+  }
+  function sendReply(gid){
+    if(!db||!who) return; var t=(rdr[gid]||'').trim(); if(!t) return;
+    var ts=String(Date.now()), obj={w:who.admin?'a':'e',t:t.slice(0,500),at:new Date().toISOString()};
+    rdr[gid]=''; var g=gaps[gid]||{}; var r=Object.assign({},g.r||{}); r[ts]=obj; gaps[gid]=Object.assign({},g,{r:r}); render();
+    var body={r:{}}; body.r[ts]=obj;
+    queue('r'+gid,function(){return db.doc('gaps/'+gid).set(body,{merge:true})});
+  }
   function gapBlock(p){
     var list=gapList().filter(function(g){return g.pid===p.id});
     var open=list.filter(function(g){return !g.done}).length, d=drafts[p.id]||{ar:'',en:''}, dis=canWrite?'':' disabled';
     var h='<div class="gaps"><div class="gh"><b>'+esc(L('Shortfalls','التقصير'))+'</b><span class="pill '+(open?'bad':'ok')+'">'+esc(open?open+' '+L('open','مفتوح'):L('none','لا يوجد'))+'</span></div>';
     list.forEach(function(g){
       h+='<div class="gap'+(g.done?' done':'')+'"><button class="gck" data-gdone="'+g.id+'" aria-pressed="'+(!!g.done)+'" title="'+esc(L('Done','تم'))+'" aria-label="'+esc(L('Done','تم'))+'"'+dis+'>'+(g.done?'✓':'')+'</button>'+
-        '<div class="gt">'+gapText(g)+'<small>'+esc(L('Added','أضيف'))+' '+esc(g.d||'')+(g.done&&g.dd?' — '+esc(L('Done','تم'))+' '+esc(g.dd):'')+'</small></div>'+
-        '<button class="gx'+(confDel===g.id?' conf':'')+'" data-gdel="'+g.id+'" aria-label="'+esc(L('Delete','حذف'))+'"'+dis+'>'+(confDel===g.id?esc(L('Confirm','تأكيد')):'×')+'</button></div>';
+        '<div class="gt">'+gapText(g)+'<small>'+esc(L('Added','أضيف'))+' '+esc(g.d||'')+(g.done&&g.dd?' — '+esc(L('Done','تم'))+' '+esc(g.dd):'')+'</small>'+replyBox(g)+'</div>'+
+        (isAdmin?'<button class="gx'+(confDel===g.id?' conf':'')+'" data-gdel="'+g.id+'" aria-label="'+esc(L('Delete','حذف'))+'"'+dis+'>'+(confDel===g.id?esc(L('Confirm','تأكيد')):'×')+'</button>':'')+'</div>';
     });
-    h+='<form class="gform" data-gform="'+p.id+'"><input id="gar-'+p.id+'" data-gin="ar" data-pid="'+p.id+'" dir="rtl" lang="ar" placeholder="التقصير بالعربي" value="'+esc(d.ar)+'"'+dis+'>'+
+    if(isAdmin) h+='<form class="gform" data-gform="'+p.id+'"><input id="gar-'+p.id+'" data-gin="ar" data-pid="'+p.id+'" dir="rtl" lang="ar" placeholder="التقصير بالعربي" value="'+esc(d.ar)+'"'+dis+'>'+
       '<input id="gen-'+p.id+'" data-gin="en" data-pid="'+p.id+'" dir="ltr" lang="en" placeholder="Shortfall in English" value="'+esc(d.en)+'"'+dis+'>'+
       '<button type="submit"'+dis+'>'+esc(L('Add shortfall','إضافة تقصير'))+'</button></form></div>';
     return h;
@@ -314,7 +337,7 @@ td.mono{font-family:var(--mono);font-size:13px}
     h+='<div class="gl">';
     open.forEach(function(g){
       var p=PEOPLE.filter(function(x){return x.id===g.pid})[0];
-      h+='<div class="gap"><div class="gt"><b>'+pn(p)+' <span class="arn">· '+tn(teamOf(p.team))+'</span></b>'+gapText(g)+'<small>'+esc(L('Added','أضيف'))+' '+esc(g.d||'')+'</small></div></div>';
+      h+='<div class="gap"><div class="gt"><b>'+pn(p)+' <span class="arn">· '+tn(teamOf(p.team))+'</span></b>'+gapText(g)+'<small>'+esc(L('Added','أضيف'))+' '+esc(g.d||'')+'</small>'+replyBox(g)+'</div></div>';
     });
     return h+'</div></section>';
   }
@@ -607,10 +630,8 @@ td.mono{font-family:var(--mono);font-size:13px}
   function save(docId,key,v){
     var ref=db.doc('days/'+docId);
     queue(docId,function(){
-      return ref.get().then(function(s){
-        var body={c:{},team:docId.split('_')[1]}; body.c[key]=v;
-        return ref.set(body,{merge:true});
-      });
+      var body={c:{},team:docId.split('_')[1]}; body.c[key]=v;
+      return ref.set(body,{merge:true});
     });
   }
   function setVal(pid,ti,v){
@@ -673,12 +694,14 @@ td.mono{font-family:var(--mono);font-size:13px}
   });
   $('view').addEventListener('input',function(e){
     var t=e.target; if(t.dataset&&t.dataset.gin){var pid=t.dataset.pid; drafts[pid]=drafts[pid]||{ar:'',en:''}; drafts[pid][t.dataset.gin]=t.value}
+    if(t.dataset&&t.dataset.rin){rdr[t.dataset.rin]=t.value}
     if(t.dataset&&t.dataset.xin){xd[t.dataset.xin]=t.value}
     if(t.dataset&&t.dataset.pin){pd[t.dataset.pin]=t.value}
     if(t.dataset&&t.dataset.tin){td[t.dataset.tin]=t.value}
   });
   $('view').addEventListener('submit',function(e){
     var f=e.target.closest('form'); if(!f) return;
+    if(f.dataset.rform){e.preventDefault();sendReply(f.dataset.rform);return}
     if(f.dataset.xform){e.preventDefault();addExtra();return}
     if(f.dataset.pform){e.preventDefault();addMember();return}
     if(f.dataset.tform){e.preventDefault();addTeam();return}
