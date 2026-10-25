@@ -144,6 +144,9 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
 .bar .id{flex-direction:row;align-items:center;gap:14px}
 .bar .idt{display:flex;flex-direction:column;gap:2px;min-width:0}
 .subnav{align-self:flex-start}
+.dtrole{margin-top:10px}
+.dt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dt .btn{padding:4px 10px;font-size:12px}
 .offbar{display:flex;gap:10px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .logo{height:34px;width:auto;flex:none;display:block}
 @media (prefers-reduced-motion:no-preference){.logo{animation:blink 2.4s ease-in-out infinite}}
@@ -278,7 +281,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
   function span(from,to){var a=[],d=from;while(d<=to){a.push(d);d=addDays(d,1)}return a}
 
   function tasksOf(p){
-    var base=TASKS[p.role].map(function(t,i){return {k:String(i),en:t[0],ar:t[1],from:START,to:null,extra:false}});
+    var base=TASKS[p.role].map(function(t,i){var d=defs[p.role+'-'+i]||{};return {k:String(i),en:d.en||t[0],ar:d.ar||t[1],from:START,to:d.to||null,extra:false}});
     Object.keys(extras).forEach(function(id){
       var x=extras[id]; if(!x||x.target!==(x.scope==='role'?p.role:p.id)||(x.scope!=='role'&&x.scope!=='person')) return;
       base.push({k:'x'+id,en:x.en||'',ar:x.ar||'',from:x.from||START,to:x.to||null,extra:true,id:id});
@@ -286,7 +289,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     return base;
   }
   function activeOn(t,d){return d>=t.from&&(!t.to||d<=t.to)}
-  var offs={};
+  var offs={}, defs={}, confD=null;
   function offOf(p,d){return offs[d+'_'+p.id]||null}
   function offLabel(t){return t==='leave'?L('On leave','إجازة'):L('Absent','غياب')}
   function offBar(p){
@@ -556,9 +559,16 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     });
     h+='<!--S:info--><section class="panel"><header><h2>'+esc(L('Team logins','دخول التيمات'))+'</h2><span class="sub">'+esc(L('Create one user per team in Firebase Authentication with this email and a password of your choice.','اعمل مستخدم لكل تيم في Firebase Authentication بالإيميل ده وباسورد من اختيارك.'))+'</span></header><div class="rolelist">';
     TEAMS.forEach(function(t){h+='<div><b>'+tn(t)+'</b><span class="pill na mono">'+esc(t.id.toLowerCase()+'@team.kpi')+'</span></div>'});
-    h+='</div></section><section class="panel"><header><h2>'+esc(L('Default tasks','المهام الأساسية'))+'</h2><span class="sub">'+esc(L('Built into the tracker. Ask Claude to change them.','جوّه الصفحة. اطلب من Claude يغيّرها.'))+'</span></header><div class="rolelist">';
+    h+='</div></section><section class="panel"><header><h2>'+esc(L('Default tasks','المهام الأساسية'))+'</h2><span class="sub">'+esc(L('Rename or stop a default task. Past days keep their records. To add one use Add a task.','عدّل الاسم أو أوقف المهمة الأساسية. الأيام اللي فاتت بتفضل. للإضافة استخدم إضافة مهمة.'))+'</span></header><div class="rolelist">';
     Object.keys(TASKS).forEach(function(r){
-      h+='<div><b>'+esc(L(ROLE[r][0],ROLE[r][1]))+'</b>'+TASKS[r].map(function(t){return '<span class="pill na" dir="auto">'+esc(L(t[0],t[1]))+'</span>'}).join('')+'</div>';
+      h+='<div class="dtrole"><b>'+esc(L(ROLE[r][0],ROLE[r][1]))+'</b></div>';
+      TASKS[r].forEach(function(t,i){
+        var id=r+'-'+i, d=defs[id]||{}, stopped=d.to&&d.to<TODAY;
+        h+='<div class="dt"><span class="pill na" dir="auto">'+esc(L(d.en||t[0],d.ar||t[1]))+'</span>'+
+          (stopped?'<span class="pill warn">'+esc(L('Stopped','موقوفة'))+' · '+esc(d.to)+'</span>':'')+
+          '<button class="btn alt" data-dedit="'+id+'">'+esc(L('Rename','تعديل الاسم'))+'</button>'+
+          '<button class="btn alt" data-dstop="'+id+'">'+esc(stopped?L('Restore','إرجاع'):(confD===id?L('Confirm stop','تأكيد الإيقاف'):L('Stop','إيقاف')))+'</button></div>';
+      });
     });
     h+='</div></section>';
     var parts={}; h.split('<!--S:').slice(1).forEach(function(p){var k=p.slice(0,p.indexOf('-->')); parts[k]=p.slice(p.indexOf('-->')+3)});
@@ -706,6 +716,25 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
       queue('o'+okey,function(){return oty==='none'?db.doc('off/'+okey).delete():db.doc('off/'+okey).set({pid:opid,team:oper.team,date:osel,type:oty})});
       return;
     }
+    if(b.dataset.dedit||b.dataset.dstop){
+      if(!db||!isAdmin) return;
+      var did2=b.dataset.dedit||b.dataset.dstop, dp=did2.split('-'), dtk=TASKS[dp[0]]&&TASKS[dp[0]][+dp[1]]; if(!dtk) return;
+      var cur=defs[did2]||{};
+      if(b.dataset.dedit){
+        var nar=window.prompt(L('Task name in Arabic','اسم المهمة بالعربي'),cur.ar||dtk[1]); if(nar===null) return;
+        var nen=window.prompt(L('Task name in English','اسم المهمة بالإنجليزي'),cur.en||dtk[0]); if(nen===null) return;
+        nar=nar.trim(); nen=nen.trim(); if(!nar&&!nen) return;
+        defs[did2]=Object.assign({},cur,{ar:nar||dtk[1],en:nen||dtk[0]}); render();
+        queue('d'+did2,function(){return db.doc('defs/'+did2).set({ar:nar||dtk[1],en:nen||dtk[0]},{merge:true})});
+        return;
+      }
+      var stopped2=cur.to&&cur.to<TODAY;
+      if(stopped2){defs[did2]=Object.assign({},cur,{to:null}); render(); queue('d'+did2,function(){return db.doc('defs/'+did2).set({to:null},{merge:true})}); return}
+      if(confD!==did2){confD=did2;render();setTimeout(function(){if(confD===did2){confD=null;render()}},4000);return}
+      confD=null; var dto=addDays(TODAY,-1); defs[did2]=Object.assign({},cur,{to:dto}); render();
+      queue('d'+did2,function(){return db.doc('defs/'+did2).set({to:dto},{merge:true})});
+      return;
+    }
     if(b.dataset.asub){adminSub=b.dataset.asub;render();return}
     if(b.dataset.team){
       var tid=b.dataset.team;
@@ -836,7 +865,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
         if(who&&who.admin&&!x.team){var pp=PEOPLE.filter(function(q){return q.id===x.pid})[0]; if(pp) db.doc('gaps/'+d.id).update({team:pp.team}).catch(function(){})}});
       gaps=m; render();
     },function(){}));
-    [['extra',function(m){extras=m}],['months',function(m){months=m}],
+    [['extra',function(m){extras=m}],['defs',function(m){defs=m}],['months',function(m){months=m}],
      ['staff',function(m){staff=m;rebuild()}]].forEach(function(c){
       unsubs.push(db.collection(c[0]).onSnapshot(function(snap){
         var m={}; snap.docs.forEach(function(d){m[d.id]=d.data()||{}}); c[1](m); render();
@@ -855,7 +884,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
         render();
       },function(){});
       fbAuth.onAuthStateChanged(function(u){
-        unsub(); store={};gaps={};offs={};extras={};months={};staff={};synced=false; rebuildTeams(); rebuild();
+        unsub(); store={};gaps={};offs={};defs={};extras={};months={};staff={};synced=false; rebuildTeams(); rebuild();
         if(!u){who=null;isAdmin=false;teamFilter='all';render();return}
         var em=(u.email||'').toLowerCase();
         if(/@team\.kpi$/.test(em)){who={tl:em.split('@')[0],team:null};isAdmin=false;teamFilter='all';resolveWho();if(tab==='admin'||tab==='reports')tab='dash'}
