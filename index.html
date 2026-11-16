@@ -163,6 +163,41 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
 .team[style*="--tc"]>.thead{background:color-mix(in srgb,var(--tc) 10%,var(--surface))}
 @media (max-width:520px){h1{font-size:19px}.kpi .v{font-size:26px}.task{flex-wrap:wrap}}
 @media (prefers-reduced-motion:no-preference){.meter .f{transition:width .25s ease}}
+
+/* Org tree (Team tab) */
+.org{display:flex;flex-direction:column;align-items:center;gap:0;padding:8px 0 4px}
+.org .lvl{display:flex;flex-direction:column;align-items:center;width:100%}
+.org .vl{width:2px;height:22px;background:var(--line)}
+.ocard{position:relative;width:min(340px,100%);background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--oc,var(--accent));border-radius:12px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:6px}
+.ocard .oh{display:flex;align-items:center;gap:10px}
+.ocard .av{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;background:var(--oc,var(--accent));font-size:15px}
+.ocard .on{display:flex;flex-direction:column;min-width:0;flex:1}
+.ocard .on b{font-size:15px;line-height:1.25}
+.ocard .on small{color:var(--muted);font-size:12px}
+.ocard .lvn{flex:none;font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+.ocard dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:12.5px}
+.ocard dt{color:var(--muted)}
+.ocard dd{margin:0;font-family:var(--mono);overflow-wrap:anywhere;direction:ltr;text-align:start}
+.ocard dd a{color:inherit}
+.ocard dd.miss{color:var(--na);font-family:var(--font);font-style:italic}
+.ocard .oed{align-self:flex-start}
+.ocard form{display:grid;gap:6px}
+.ocard form input{width:100%;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.ocard form .r{display:flex;gap:6px}
+.ocard.hit{outline:3px solid var(--warn);outline-offset:2px}
+.ocard.dim{opacity:.35}
+.obranch{position:relative;display:flex;flex-wrap:wrap;justify-content:center;gap:18px;width:100%;padding-top:22px}
+.obranch:before{content:"";position:absolute;top:0;left:12%;right:12%;height:2px;background:var(--line)}
+.obranch>.col{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;flex:1 1 260px;max-width:340px}
+.obranch>.col:before{content:"";position:absolute;top:-22px;left:50%;width:2px;height:22px;background:var(--line)}
+.obranch .subs{display:flex;flex-direction:column;gap:10px;width:100%;padding-inline-start:16px;border-inline-start:2px dashed color-mix(in srgb,var(--oc) 45%,var(--line))}
+.obranch .subs .ocard{width:100%;border-top-width:2px}
+.obranch .subs .av{width:30px;height:30px;font-size:13px}
+.ohead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.ohead input{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:220px}
+.ostat{display:flex;flex-wrap:wrap;gap:8px}
+@media (max-width:620px){.obranch:before{display:none}.obranch>.col:before{display:none}.obranch{padding-top:8px}}
+@media print{.bar,.legend,#notice,.oed,.ohead input{display:none!important}.ocard{box-shadow:none;break-inside:avoid}}
 </style>
 
 </head><body>
@@ -188,6 +223,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
       <div class="seg" role="group" aria-label="View">
         <button id="tab-dash" aria-pressed="true"></button>
         <button id="tab-check" aria-pressed="false"></button>
+        <button id="tab-org" aria-pressed="false"></button>
         <button id="tab-reports" aria-pressed="false"></button>
         <button id="tab-admin" aria-pressed="false" hidden></button>
       </div>
@@ -661,6 +697,72 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     pd={ar:'',en:'',team:pd.team,role:pd.role,from:''}; render();
     queue('pnew',function(){return db.collection('staff').add(doc)});
   }
+
+  /* ---- Org tree ---- */
+  var CHAIN=[
+    {id:'ezz',name:'Ezzat',ar:'عزت'},
+    {id:'krm',name:'Karim',ar:'كريم'},
+    {id:'amr',name:'Amr Abdelfattah',ar:'عمرو عبدالفتاح'},
+    {id:'shb',name:'Shebl',ar:'شبل'},
+    {id:'khd',name:'Khodair',ar:'خضير'},
+    {id:'nsr',name:'Nasser',ar:'ناصر'}
+  ];
+  var OF=[['title','Job title','المسمى الوظيفي','text'],['hr','HR ID','HR ID','text'],['email','Email','الإيميل','email'],['phone','Work phone','رقم الشغل','tel']];
+  var orgEdit=null, orgDraft={}, orgQ='';
+  function oinfo(id){return defs['org_'+id]||{}}
+  function initials(n){n=String(n||'').replace(/[()]/g,'').trim(); var w=n.split(/\s+/); return (w[0]||'?').charAt(0)+(w[1]?w[1].charAt(0):'')}
+  function orgPeople(){return PEOPLE.filter(function(p){return !p.vacant&&onDuty(p,TODAY)})}
+  function oMatch(id,p){
+    if(!orgQ) return null; var q=orgQ.toLowerCase(), x=oinfo(id);
+    return [p.name,p.ar,x.title,x.hr,x.email,x.phone].some(function(v){return v&&String(v).toLowerCase().indexOf(q)>=0});
+  }
+  function ocard(id,p,sub,color,lvl){
+    var x=oinfo(id), m=oMatch(id,p), cl='ocard'+(m===true?' hit':m===false?' dim':'');
+    var h='<div class="'+cl+'"'+(color?' style="--oc:'+color+'"':'')+' id="oc-'+id+'"><div class="oh"><span class="av" aria-hidden="true">'+esc(initials(lang==='ar'?p.ar:p.name))+'</span>'+
+      '<span class="on"><b>'+pn(p)+'</b><small>'+esc(x.title||sub||'')+'</small></span>'+(lvl?'<span class="lvn">L'+lvl+'</span>':'')+'</div>';
+    if(orgEdit===id&&isAdmin){
+      h+='<form data-oform="'+id+'">'+OF.map(function(f){return '<input id="oin-'+id+'-'+f[0]+'" data-oin="'+f[0]+'" type="'+f[3]+'" dir="'+(f[0]==='title'?'auto':'ltr')+'" placeholder="'+esc(L(f[1],f[2]))+'" value="'+esc(orgDraft[f[0]]||'')+'" maxlength="120">'}).join('')+
+        '<div class="r"><button class="btn" type="submit">'+esc(L('Save','حفظ'))+'</button><button class="btn alt" type="button" data-ocancel="1">'+esc(L('Cancel','إلغاء'))+'</button></div></form>';
+    } else {
+      h+='<dl>'+OF.slice(1).map(function(f){var v=x[f[0]];
+        var vv=!v?'<dd class="miss">'+esc(L('Not added','مش متضاف'))+'</dd>':f[0]==='email'?'<dd><a href="mailto:'+esc(v)+'">'+esc(v)+'</a></dd>':f[0]==='phone'?'<dd><a href="tel:'+esc(String(v).replace(/[^\d+]/g,''))+'">'+esc(v)+'</a></dd>':'<dd>'+esc(v)+'</dd>';
+        return '<dt>'+esc(L(f[1],f[2]))+'</dt>'+vv}).join('')+'</dl>';
+      if(isAdmin&&db) h+='<button class="btn alt oed" type="button" data-oedit="'+id+'">'+esc(L('Edit details','تعديل البيانات'))+'</button>';
+    }
+    return h+'</div>';
+  }
+  function org(){
+    var ppl=orgPeople(), sup=ppl.filter(function(p){return p.role==='Super'});
+    var all=CHAIN.map(function(c){return c.id}).concat(ppl.filter(function(p){return p.role==='Super'||p.role==='Senior'}).map(function(p){return p.id}));
+    var filled=all.filter(function(id){var x=oinfo(id);return x.hr&&x.email&&x.phone}).length;
+    var h='<section class="panel"><header class="ohead"><div><h2>'+esc(L('Team structure','هيكل الفريق'))+'</h2><span class="sub">'+esc(L('Reporting line with HR ID, email and work phone','التسلسل الإداري مع الـ HR ID والإيميل ورقم الشغل'))+'</span></div>'+
+      '<input id="oq" type="search" data-oq="1" dir="auto" placeholder="'+esc(L('Search name, HR ID, email or phone','دوّر بالاسم أو HR ID أو الإيميل أو الرقم'))+'" value="'+esc(orgQ)+'"></header>'+
+      '<div class="ostat"><span class="pill na">'+esc(L('People','الأفراد'))+': '+all.length+'</span><span class="pill na">'+esc(L('Supers','السوبرات'))+': '+sup.length+'</span><span class="pill na">'+esc(L('Seniors','السنيورز'))+': '+ppl.filter(function(p){return p.role==='Senior'}).length+'</span>'+
+      '<span class="pill '+(filled===all.length?'ok':'warn')+'">'+esc(L('Complete details','بيانات كاملة'))+': '+filled+'/'+all.length+'</span></div>';
+    h+='<div class="org">';
+    CHAIN.forEach(function(c,i){
+      if(i) h+='<span class="vl"></span>';
+      h+='<div class="lvl">'+ocard(c.id,c,'',null,i+1)+'</div>';
+    });
+    h+='<span class="vl"></span><div class="obranch">';
+    sup.forEach(function(s){
+      var col=teamColor(s.team), t=teamOf(s.team);
+      h+='<div class="col" style="--oc:'+col+'">'+ocard(s.id,s,L('Super','سوبر')+' · '+L(t.en,t.ar),col,CHAIN.length+1);
+      var sn=ppl.filter(function(p){return p.role==='Senior'&&p.team===s.team});
+      if(sn.length) h+='<div class="subs">'+sn.map(function(p){return ocard(p.id,p,L('Senior','سنيور'),col,CHAIN.length+2)}).join('')+'</div>';
+      h+='</div>';
+    });
+    h+='</div></div>';
+    if(!db||!who) h+='<div class="vacant">'+esc(L('Sign in to see saved details.','سجّل دخول عشان تشوف البيانات المحفوظة.'))+'</div>';
+    else if(isAdmin) h+='<div class="sub">'+esc(L('Supers and seniors follow Teams & members. Use Edit details on any card to add HR ID, email and phone.','السوبرات والسنيورز بيتسحبوا من التيمات والأعضاء. استخدم تعديل البيانات على أي كارت لإضافة الـ HR ID والإيميل والرقم.'))+'</div>';
+    return h+'</section>';
+  }
+  function saveOrg(id){
+    if(!db||!isAdmin) return; var d={};
+    OF.forEach(function(f){d[f[0]]=String(orgDraft[f[0]]||'').trim().slice(0,120)});
+    defs['org_'+id]=Object.assign({},defs['org_'+id]||{},d); orgEdit=null; orgDraft={}; render();
+    queue('org'+id,function(){return db.doc('defs/org_'+id).set(d,{merge:true})});
+  }
   function render(){
     document.documentElement.lang=lang==='ar'?'ar':'en';
     $('app').dir=lang==='ar'?'rtl':'ltr';
@@ -669,6 +771,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     $('today').textContent=L('Today','النهاردة');
     $('tab-dash').textContent=L('Dashboard','لوحة المتابعة');
     $('tab-check').textContent=L('Daily check','المتابعة اليومية');
+    $('tab-org').textContent=L('Team','الفريق');
     $('lg1').textContent=L('Completion = ✓ tasks ÷ applicable tasks (N/A excluded, blank counts as not done)','النسبة = المهام ✓ ÷ المهام المطلوبة (N/A مش محسوبة، والفاضي يعني لسه ما اتعملتش)');
     $('lg2').textContent=L('Green ≥ ','أخضر ≥ ')+Math.round(TARGET*100)+'% · '+L('Amber ≥ ','أصفر ≥ ')+Math.round(ALERT*100)+'% · '+L('Red below','أحمر أقل');
     $('day').value=selected; $('day').min=START; $('day').max=TODAY;
@@ -676,11 +779,11 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     if((tab==='admin'||tab==='reports')&&!isAdmin) tab='dash';
     $('tab-reports').textContent=L('Reports & export','التقارير والتصدير');
     $('tab-admin').textContent=L('Manage tasks','إدارة المهام'); $('tab-admin').hidden=!isAdmin; $('tab-reports').hidden=!isAdmin;
-    var gate=!!db&&!who; $('tab-dash').hidden=gate; $('tab-check').hidden=gate; if(gate){$('tab-admin').hidden=true;$('tab-reports').hidden=true}
-    ['dash','check','reports','admin'].forEach(function(k){$('tab-'+k).setAttribute('aria-pressed',tab===k)});
+    var gate=!!db&&!who; $('tab-dash').hidden=gate; $('tab-check').hidden=gate; $('tab-org').hidden=gate; if(gate){$('tab-admin').hidden=true;$('tab-reports').hidden=true}
+    ['dash','check','org','reports','admin'].forEach(function(k){$('tab-'+k).setAttribute('aria-pressed',tab===k)});
     var ae=document.activeElement, fid=(ae&&ae.id&&$('view').contains(ae))?ae.id:null, ss=null, se=null;
     if(fid&&ae.selectionStart!=null){ss=ae.selectionStart;se=ae.selectionEnd}
-    $('view').innerHTML = gate? loginPanel() : ({dash:dash,check:check,reports:reports,admin:admin})[tab]();
+    $('view').innerHTML = gate? loginPanel() : ({dash:dash,check:check,org:org,reports:reports,admin:admin})[tab]();
     if(fid){var fe=$(fid); if(fe){fe.focus(); try{if(ss!=null)fe.setSelectionRange(ss,se)}catch(e){}}}
     $('status').textContent = db? (synced?L('Live · shared with the team','مباشر · مشترك مع الفريق'):L('Loading saved data…','جاري تحميل البيانات…')) : L('Offline view · changes are not saved','عرض بدون اتصال · التغييرات مش بتتحفظ');
     $('notice').innerHTML = (db&&!canWrite)?'<div class="note">'+esc(L('You can view this tracker but not edit it. Ask the owner for Contributor access.','تقدر تشوف الصفحة بس مش تعدّل. اطلب صلاحية Contributor من صاحب الصفحة.'))+'</div>':
@@ -735,6 +838,8 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
       queue('d'+did2,function(){return db.doc('defs/'+did2).set({to:dto},{merge:true})});
       return;
     }
+    if(b.dataset.oedit){if(!isAdmin)return; orgEdit=b.dataset.oedit; orgDraft=Object.assign({},oinfo(orgEdit)); render(); var fi=$('oin-'+orgEdit+'-title'); if(fi)fi.focus(); return}
+    if(b.dataset.ocancel){orgEdit=null;orgDraft={};render();return}
     if(b.dataset.asub){adminSub=b.dataset.asub;render();return}
     if(b.dataset.team){
       var tid=b.dataset.team;
@@ -791,6 +896,8 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     if(t.dataset&&t.dataset.xin){xd[t.dataset.xin]=t.value}
     if(t.dataset&&t.dataset.pin){pd[t.dataset.pin]=t.value}
     if(t.dataset&&t.dataset.tin){td[t.dataset.tin]=t.value}
+    if(t.dataset&&t.dataset.oin){orgDraft[t.dataset.oin]=t.value}
+    if(t.dataset&&t.dataset.oq){orgQ=t.value.trim();render()}
   });
   $('view').addEventListener('submit',function(e){
     var f=e.target.closest('form'); if(!f) return;
@@ -798,6 +905,7 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     if(f.dataset.xform){e.preventDefault();addExtra();return}
     if(f.dataset.pform){e.preventDefault();addMember();return}
     if(f.dataset.tform){e.preventDefault();addTeam();return}
+    if(f.dataset.oform){e.preventDefault();saveOrg(f.dataset.oform);return}
     if(!f.dataset.gform) return; e.preventDefault();
     var pid=f.dataset.gform, d=drafts[pid]||{ar:'',en:''}, ar=d.ar.trim(), en=d.en.trim();
     if((!ar&&!en)||!db||!canWrite) return;
@@ -814,10 +922,11 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
   $('day').onchange=function(){if($('day').value)go($('day').value)};
   $('tab-dash').onclick=function(){tab='dash';render()};
   $('tab-check').onclick=function(){tab='check';render()};
+  $('tab-org').onclick=function(){tab='org';render()};
   $('tab-reports').onclick=function(){tab='reports';render()};
   $('tab-admin').onclick=function(){tab='admin';render()};
   ['en','ar'].forEach(function(k){$('lang-'+k).onclick=function(){lang=k;try{localStorage.setItem('kpi-lang',k)}catch(e){}render()}});
-  try{var hh=(location.hash||'').replace('#','');if(hh==='check'){tab='check'}}catch(e){}
+  try{var hh=(location.hash||'').replace('#','');if(hh==='check'){tab='check'}else if(hh==='team'){tab='org'}}catch(e){}
   render();
 
   var FBCFG={apiKey:"AIzaSyB5wMhA8mN9gr-tmb3bqKJi-WkptrHvq8k",authDomain:"team-kpi-tracker-30bd0.firebaseapp.com",projectId:"team-kpi-tracker-30bd0",storageBucket:"team-kpi-tracker-30bd0.firebasestorage.app",messagingSenderId:"963123858248",appId:"1:963123858248:web:03d6a1e8bc8ee71151c17d"};
