@@ -750,12 +750,12 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     shb:{title:'Head of Fleet'},
     khd:{title:'Senior Manager Fleet'},
     nsr:{hr:'10898',email:'ahmed.nassar@bosta.co',title:'Manager Fleet LM'},
-    sk:{hr:'10155',email:'sayed.khaled.sayed@bosta.co',title:'Supervisor Fleet LM'},
-    ah:{hr:'10897',email:'ahmed.bahgat@bosta.co',title:'Supervisor Fleet LM'},
+    sk:{phone:'01157526068',hr:'10155',email:'sayed.khaled.sayed@bosta.co',title:'Supervisor Fleet LM'},
+    ah:{phone:'01019008340',hr:'10897',email:'ahmed.bahgat@bosta.co',title:'Supervisor Fleet LM'},
     ke:{hr:'12088',email:'khaled.emad@bosta.co',title:'Supervisor Fleet LM'},
     aa:{hr:'11736',email:'ahmed.abuzaid@bosta.co',title:'Senior Fleet LM'},
-    mg:{hr:'11734',email:'mohamed.Gamal.Ahmed@bosta.co',title:'Senior Fleet LM'},
-    ef:{hr:'11730',email:'islam.farouk@bosta.co',title:'Senior Fleet LM'},
+    mg:{phone:'01060246083',hr:'11734',email:'mohamed.Gamal.Ahmed@bosta.co',title:'Senior Fleet LM'},
+    ef:{phone:'01037934098',hr:'11730',email:'islam.farouk@bosta.co',title:'Senior Fleet LM'},
     bl:{hr:'12101',email:'belal.rafaat@bosta.co',title:'Senior Fleet LM'},
     ss:{hr:'10931',email:'saied.soliman@bosta.co',title:'Senior Fleet LM'},
     ab:{hr:'472 (PPO)',email:'abdelrahman.saad@ext.bosta.co',title:'Coordinator Fleet LM'}
@@ -764,7 +764,14 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     if(typeof d.en==='string'&&d.en.charAt(0)==='{'){try{x=JSON.parse(d.en)}catch(e){x={}}}
     var o=Object.assign({},OSEED[id]||{}); Object.keys(x).forEach(function(k){if(x[k])o[k]=x[k]}); return o}
   function initials(n){n=String(n||'').replace(/[()]/g,'').trim(); var w=n.split(/\s+/); return (w[0]||'?').charAt(0)+(w[1]?w[1].charAt(0):'')}
-  function orgPeople(){return PEOPLE.filter(function(p){return !p.vacant&&onDuty(p,TODAY)})}
+  var ABD=/abd\s*el\s*-?\s*rahman|abdl?rahman|عبد\s*الرحمن/i;
+  function orgPeople(){
+    var a=PEOPLE.filter(function(p){return !p.vacant&&onDuty(p,TODAY)});
+    var hit=a.filter(function(p){return ABD.test((p.name||'')+' '+(p.ar||''))})[0];
+    if(hit){ a=a.map(function(p){return p===hit?Object.assign({},p,{id:'ab',team:'t1',role:'Coordinator'}):p}) }
+    else a.push({id:'ab',team:'t1',role:'Coordinator',name:'Abdelrahman Saad',ar:'عبدالرحمن سعد'});
+    return a;
+  }
   function oMatch(id,p){
     if(!orgQ) return null; var q=orgQ.toLowerCase(), x=oinfo(id);
     return [p.name,p.ar,x.title,x.hr,x.email,x.phone].some(function(v){return v&&String(v).toLowerCase().indexOf(q)>=0});
