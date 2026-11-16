@@ -743,7 +743,21 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
   ];
   var OF=[['title','Job title','المسمى الوظيفي','text'],['hr','HR ID','HR ID','text'],['email','Email','الإيميل','email'],['phone','Work phone','رقم الشغل','tel']];
   var orgErr='', orgEdit=null, orgDraft={}, orgQ='', ORGT={tx:'t2'}, RORD={Senior:0,Coordinator:1,Temp:2};
-  function oinfo(id){var d=defs['org_'+id]||{}; if(typeof d.en==='string'&&d.en.charAt(0)==='{'){try{return JSON.parse(d.en)}catch(e){}} return d}
+  var OSEED={
+    nsr:{hr:'10898',email:'ahmed.nassar@bosta.co',title:'Manager Fleet LM'},
+    sk:{hr:'10155',email:'sayed.khaled.sayed@bosta.co',title:'Supervisor Fleet LM'},
+    ah:{hr:'10897',email:'ahmed.bahgat@bosta.co',title:'Supervisor Fleet LM'},
+    ke:{hr:'12088',email:'khaled.emad@bosta.co',title:'Supervisor Fleet LM'},
+    aa:{hr:'11736',email:'ahmed.abuzaid@bosta.co',title:'Senior Fleet LM'},
+    mg:{hr:'11734',email:'mohamed.Gamal.Ahmed@bosta.co',title:'Senior Fleet LM'},
+    ef:{hr:'11730',email:'islam.farouk@bosta.co',title:'Senior Fleet LM'},
+    bl:{hr:'12101',email:'belal.rafaat@bosta.co',title:'Senior Fleet LM'},
+    ss:{hr:'10931',email:'saied.soliman@bosta.co',title:'Senior Fleet LM'},
+    ab:{hr:'472 (PPO)',email:'abdelrahman.saad@ext.bosta.co',title:'Coordinator Fleet LM'}
+  };
+  function oinfo(id){var d=defs['org_'+id]||{}, x=d;
+    if(typeof d.en==='string'&&d.en.charAt(0)==='{'){try{x=JSON.parse(d.en)}catch(e){x={}}}
+    var o=Object.assign({},OSEED[id]||{}); Object.keys(x).forEach(function(k){if(x[k])o[k]=x[k]}); return o}
   function initials(n){n=String(n||'').replace(/[()]/g,'').trim(); var w=n.split(/\s+/); return (w[0]||'?').charAt(0)+(w[1]?w[1].charAt(0):'')}
   function orgPeople(){return PEOPLE.filter(function(p){return !p.vacant&&onDuty(p,TODAY)})}
   function oMatch(id,p){
