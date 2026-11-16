@@ -195,9 +195,37 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
 .obranch .subs .av{width:30px;height:30px;font-size:13px}
 .ohead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .ohead input{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:220px}
-.ostat{display:flex;flex-wrap:wrap;gap:8px}
+.ostat{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px 0}
+.org{padding:8px 16px 16px!important}
+.oerr{margin:12px 16px 0}
 @media (max-width:620px){.obranch:before{display:none}.obranch>.col:before{display:none}.obranch{padding-top:8px}}
 @media print{.bar,.legend,#notice,.oed,.ohead input{display:none!important}.ocard{box-shadow:none;break-inside:avoid}}
+
+/* ---- Sidebar layout + larger scale ---- */
+.wrap{max-width:1360px}
+.shell{display:grid;grid-template-columns:230px minmax(0,1fr);gap:24px;align-items:start}
+.main{display:flex;flex-direction:column;gap:20px;min-width:0}
+.main #notice:empty{display:none}
+.side{position:sticky;top:110px}
+.vnav{display:flex;flex-direction:column;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+.vnav button{font:inherit;font-weight:500;font-size:15px;color:var(--muted);background:none;border:0;border-radius:10px;padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:start;width:100%}
+.vnav button svg{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.vnav button:hover{background:var(--bg);color:var(--ink)}
+.vnav button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600;box-shadow:0 4px 12px color-mix(in srgb,var(--accent) 30%,transparent)}
+.vnav button[hidden]{display:none}
+.shell:not(:has(.vnav button:not([hidden])))>.side{display:none}
+.shell:not(:has(.vnav button:not([hidden])))>.main{grid-column:1/-1}
+@media (min-width:1100px){html{zoom:1.15}}
+@media (min-width:1500px){html{zoom:1.25}}
+@media (min-width:1900px){html{zoom:1.4}}
+@media (max-width:860px){
+  .shell{grid-template-columns:minmax(0,1fr);gap:14px}
+  .side{min-width:0}
+  .side{position:static}
+  .vnav{flex-direction:row;overflow-x:auto;padding:5px;border-radius:12px}
+  .vnav button{width:auto;white-space:nowrap;padding:8px 12px;font-size:14px;gap:8px}
+  .vnav button svg{width:17px;height:17px}
+}
 </style>
 
 </head><body>
@@ -220,18 +248,24 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
         <button id="lang-ar" aria-pressed="false">عربي</button>
       </div>
       <button class="btn alt" id="adm" type="button"></button>
-      <div class="seg" role="group" aria-label="View">
+    </div>
+  </div>
+  <div class="shell">
+    <aside class="side">
+      <nav class="vnav" role="group" aria-label="View">
         <button id="tab-dash" aria-pressed="true"></button>
         <button id="tab-check" aria-pressed="false"></button>
         <button id="tab-org" aria-pressed="false"></button>
         <button id="tab-reports" aria-pressed="false"></button>
         <button id="tab-admin" aria-pressed="false" hidden></button>
-      </div>
+      </nav>
+    </aside>
+    <div class="main">
+      <div id="notice"></div>
+      <main id="view"></main>
+      <div class="legend"><span id="lg1"></span><span id="lg2"></span></div>
     </div>
   </div>
-  <div id="notice"></div>
-  <main id="view"></main>
-  <div class="legend"><span id="lg1"></span><span id="lg2"></span></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -708,8 +742,8 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     {id:'nsr',name:'Nasser',ar:'ناصر'}
   ];
   var OF=[['title','Job title','المسمى الوظيفي','text'],['hr','HR ID','HR ID','text'],['email','Email','الإيميل','email'],['phone','Work phone','رقم الشغل','tel']];
-  var orgEdit=null, orgDraft={}, orgQ='';
-  function oinfo(id){return defs['org_'+id]||{}}
+  var orgErr='', orgEdit=null, orgDraft={}, orgQ='', ORGT={tx:'t2'}, RORD={Senior:0,Coordinator:1,Temp:2};
+  function oinfo(id){var d=defs['org_'+id]||{}; if(typeof d.en==='string'&&d.en.charAt(0)==='{'){try{return JSON.parse(d.en)}catch(e){}} return d}
   function initials(n){n=String(n||'').replace(/[()]/g,'').trim(); var w=n.split(/\s+/); return (w[0]||'?').charAt(0)+(w[1]?w[1].charAt(0):'')}
   function orgPeople(){return PEOPLE.filter(function(p){return !p.vacant&&onDuty(p,TODAY)})}
   function oMatch(id,p){
@@ -733,12 +767,13 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
   }
   function org(){
     var ppl=orgPeople(), sup=ppl.filter(function(p){return p.role==='Super'});
-    var all=CHAIN.map(function(c){return c.id}).concat(ppl.filter(function(p){return p.role==='Super'||p.role==='Senior'}).map(function(p){return p.id}));
+    var all=CHAIN.map(function(c){return c.id}).concat(ppl.filter(function(p){return sup.some(function(x){return x.team===(ORGT[p.team]||p.team)})}).map(function(p){return p.id}));
     var filled=all.filter(function(id){var x=oinfo(id);return x.hr&&x.email&&x.phone}).length;
     var h='<section class="panel"><header class="ohead"><div><h2>'+esc(L('Team structure','هيكل الفريق'))+'</h2><span class="sub">'+esc(L('Reporting line with HR ID, email and work phone','التسلسل الإداري مع الـ HR ID والإيميل ورقم الشغل'))+'</span></div>'+
       '<input id="oq" type="search" data-oq="1" dir="auto" placeholder="'+esc(L('Search name, HR ID, email or phone','دوّر بالاسم أو HR ID أو الإيميل أو الرقم'))+'" value="'+esc(orgQ)+'"></header>'+
-      '<div class="ostat"><span class="pill na">'+esc(L('People','الأفراد'))+': '+all.length+'</span><span class="pill na">'+esc(L('Supers','السوبرات'))+': '+sup.length+'</span><span class="pill na">'+esc(L('Seniors','السنيورز'))+': '+ppl.filter(function(p){return p.role==='Senior'}).length+'</span>'+
+      '<div class="ostat"><span class="pill na">'+esc(L('People','الأفراد'))+': '+all.length+'</span><span class="pill na">'+esc(L('Supers','السوبرات'))+': '+sup.length+'</span><span class="pill na">'+esc(L('Seniors','السنيورز'))+': '+ppl.filter(function(p){return p.role==='Senior'}).length+'</span><span class="pill na">'+esc(L('Coordinators & temp','الكوردنيتورز والتيمب'))+': '+ppl.filter(function(p){return p.role==='Coordinator'||p.role==='Temp'}).length+'</span>'+
       '<span class="pill '+(filled===all.length?'ok':'warn')+'">'+esc(L('Complete details','بيانات كاملة'))+': '+filled+'/'+all.length+'</span></div>';
+    if(orgErr) h+='<div class="note oerr">'+esc(L('Could not save the details','البيانات ما اتحفظتش'))+' ('+esc(orgErr)+'). '+esc(L('Firestore rules are blocking this save.','قواعد Firestore مانعة الحفظ.'))+'</div>';
     h+='<div class="org">';
     CHAIN.forEach(function(c,i){
       if(i) h+='<span class="vl"></span>';
@@ -748,37 +783,48 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     sup.forEach(function(s){
       var col=teamColor(s.team), t=teamOf(s.team);
       h+='<div class="col" style="--oc:'+col+'">'+ocard(s.id,s,L('Super','سوبر')+' · '+L(t.en,t.ar),col,CHAIN.length+1);
-      var sn=ppl.filter(function(p){return p.role==='Senior'&&p.team===s.team});
-      if(sn.length) h+='<div class="subs">'+sn.map(function(p){return ocard(p.id,p,L('Senior','سنيور'),col,CHAIN.length+2)}).join('')+'</div>';
+      var sn=ppl.filter(function(p){return p.role!=='Super'&&(ORGT[p.team]||p.team)===s.team}).sort(function(a,b){return RORD[a.role]-RORD[b.role]});
+      if(sn.length) h+='<div class="subs">'+sn.map(function(p){return ocard(p.id,p,L(ROLE[p.role][0],ROLE[p.role][1]),col,CHAIN.length+(p.role==='Senior'?2:3))}).join('')+'</div>';
       h+='</div>';
     });
     h+='</div></div>';
     if(!db||!who) h+='<div class="vacant">'+esc(L('Sign in to see saved details.','سجّل دخول عشان تشوف البيانات المحفوظة.'))+'</div>';
-    else if(isAdmin) h+='<div class="sub">'+esc(L('Supers and seniors follow Teams & members. Use Edit details on any card to add HR ID, email and phone.','السوبرات والسنيورز بيتسحبوا من التيمات والأعضاء. استخدم تعديل البيانات على أي كارت لإضافة الـ HR ID والإيميل والرقم.'))+'</div>';
+    else if(isAdmin) h+='<div class="sub">'+esc(L('The team list follows Teams & members. Use Edit details on any card to add HR ID, email and phone.','الأسماء بتتسحب من التيمات والأعضاء. استخدم تعديل البيانات على أي كارت لإضافة الـ HR ID والإيميل والرقم.'))+'</div>';
     return h+'</section>';
   }
   function saveOrg(id){
     if(!db||!isAdmin) return; var d={};
     OF.forEach(function(f){d[f[0]]=String(orgDraft[f[0]]||'').trim().slice(0,120)});
-    defs['org_'+id]=Object.assign({},defs['org_'+id]||{},d); orgEdit=null; orgDraft={}; render();
-    queue('org'+id,function(){return db.doc('defs/org_'+id).set(d,{merge:true})});
+    var who2=CHAIN.concat(PEOPLE).filter(function(q){return q.id===id})[0]||{}, body={ar:who2.ar||who2.name||id,en:JSON.stringify(d)};
+    var prev=defs['org_'+id]; orgErr=''; defs['org_'+id]=body; orgEdit=null; orgDraft={}; render();
+    db.doc('defs/org_'+id).set(body).catch(function(e){
+      if(prev) defs['org_'+id]=prev; else delete defs['org_'+id]; render();
+      orgErr=(e&&e.code)||'error'; render();
+    });
   }
+
+  var NAVI={dash:'<path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>',
+    check:'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+    org:'<rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-3h14v3"/>',
+    reports:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    admin:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'};
+  function navSet(k,t){$('tab-'+k).innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+NAVI[k]+'</svg><span>'+esc(t)+'</span>'}
   function render(){
     document.documentElement.lang=lang==='ar'?'ar':'en';
     $('app').dir=lang==='ar'?'rtl':'ltr';
     ['en','ar'].forEach(function(k){$('lang-'+k).setAttribute('aria-pressed',lang===k)}); setAdm();
     $('ttl').textContent=L('Team KPI Tracker','متابعة أداء الفريق');
     $('today').textContent=L('Today','النهاردة');
-    $('tab-dash').textContent=L('Dashboard','لوحة المتابعة');
-    $('tab-check').textContent=L('Daily check','المتابعة اليومية');
-    $('tab-org').textContent=L('Team','الفريق');
+    navSet('dash',L('Dashboard','لوحة المتابعة'));
+    navSet('check',L('Daily check','المتابعة اليومية'));
+    navSet('org',L('Team','الفريق'));
     $('lg1').textContent=L('Completion = ✓ tasks ÷ applicable tasks (N/A excluded, blank counts as not done)','النسبة = المهام ✓ ÷ المهام المطلوبة (N/A مش محسوبة، والفاضي يعني لسه ما اتعملتش)');
     $('lg2').textContent=L('Green ≥ ','أخضر ≥ ')+Math.round(TARGET*100)+'% · '+L('Amber ≥ ','أصفر ≥ ')+Math.round(ALERT*100)+'% · '+L('Red below','أحمر أقل');
     $('day').value=selected; $('day').min=START; $('day').max=TODAY;
     $('prev').disabled=selected<=START; $('next').disabled=selected>=TODAY; $('today').disabled=selected===TODAY;
     if((tab==='admin'||tab==='reports')&&!isAdmin) tab='dash';
-    $('tab-reports').textContent=L('Reports & export','التقارير والتصدير');
-    $('tab-admin').textContent=L('Manage tasks','إدارة المهام'); $('tab-admin').hidden=!isAdmin; $('tab-reports').hidden=!isAdmin;
+    navSet('reports',L('Reports & export','التقارير والتصدير'));
+    navSet('admin',L('Manage tasks','إدارة المهام')); $('tab-admin').hidden=!isAdmin; $('tab-reports').hidden=!isAdmin;
     var gate=!!db&&!who; $('tab-dash').hidden=gate; $('tab-check').hidden=gate; $('tab-org').hidden=gate; if(gate){$('tab-admin').hidden=true;$('tab-reports').hidden=true}
     ['dash','check','org','reports','admin'].forEach(function(k){$('tab-'+k).setAttribute('aria-pressed',tab===k)});
     var ae=document.activeElement, fid=(ae&&ae.id&&$('view').contains(ae))?ae.id:null, ss=null, se=null;
