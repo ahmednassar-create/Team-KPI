@@ -742,8 +742,13 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     {id:'nsr',name:'Nasser',ar:'ناصر'}
   ];
   var OF=[['title','Job title','المسمى الوظيفي','text'],['hr','HR ID','HR ID','text'],['email','Email','الإيميل','email'],['phone','Work phone','رقم الشغل','tel']];
-  var orgErr='', orgEdit=null, orgDraft={}, orgQ='', ORGT={tx:'t2'}, RORD={Senior:0,Coordinator:1,Temp:2};
+  var EXEC={ezz:1,krm:1,amr:1,shb:1,khd:1}, orgErr='', orgEdit=null, orgDraft={}, orgQ='', ORGT={tx:'t2'}, RORD={Senior:0,Coordinator:1,Temp:2};
   var OSEED={
+    ezz:{title:'Founder'},
+    krm:{title:'CEO'},
+    amr:{title:'VP Operations'},
+    shb:{title:'Head of Fleet'},
+    khd:{title:'Senior Manager Fleet'},
     nsr:{hr:'10898',email:'ahmed.nassar@bosta.co',title:'Manager Fleet LM'},
     sk:{hr:'10155',email:'sayed.khaled.sayed@bosta.co',title:'Supervisor Fleet LM'},
     ah:{hr:'10897',email:'ahmed.bahgat@bosta.co',title:'Supervisor Fleet LM'},
@@ -769,19 +774,21 @@ body{background-image:radial-gradient(900px 380px at 0% -80px,rgba(224,0,16,.14)
     var h='<div class="'+cl+'"'+(color?' style="--oc:'+color+'"':'')+' id="oc-'+id+'"><div class="oh"><span class="av" aria-hidden="true">'+esc(initials(lang==='ar'?p.ar:p.name))+'</span>'+
       '<span class="on"><b>'+pn(p)+'</b><small>'+esc(x.title||sub||'')+'</small></span>'+(lvl?'<span class="lvn">L'+lvl+'</span>':'')+'</div>';
     if(orgEdit===id&&isAdmin){
-      h+='<form data-oform="'+id+'">'+OF.map(function(f){return '<input id="oin-'+id+'-'+f[0]+'" data-oin="'+f[0]+'" type="'+f[3]+'" dir="'+(f[0]==='title'?'auto':'ltr')+'" placeholder="'+esc(L(f[1],f[2]))+'" value="'+esc(orgDraft[f[0]]||'')+'" maxlength="120">'}).join('')+
+      h+='<form data-oform="'+id+'">'+OF.filter(function(f){return !EXEC[id]||f[0]==='title'}).map(function(f){return '<input id="oin-'+id+'-'+f[0]+'" data-oin="'+f[0]+'" type="'+f[3]+'" dir="'+(f[0]==='title'?'auto':'ltr')+'" placeholder="'+esc(L(f[1],f[2]))+'" value="'+esc(orgDraft[f[0]]||'')+'" maxlength="120">'}).join('')+
         '<div class="r"><button class="btn" type="submit">'+esc(L('Save','حفظ'))+'</button><button class="btn alt" type="button" data-ocancel="1">'+esc(L('Cancel','إلغاء'))+'</button></div></form>';
-    } else {
+    } else if(!EXEC[id]) {
       h+='<dl>'+OF.slice(1).map(function(f){var v=x[f[0]];
         var vv=!v?'<dd class="miss">'+esc(L('Not added','مش متضاف'))+'</dd>':f[0]==='email'?'<dd><a href="mailto:'+esc(v)+'">'+esc(v)+'</a></dd>':f[0]==='phone'?'<dd><a href="tel:'+esc(String(v).replace(/[^\d+]/g,''))+'">'+esc(v)+'</a></dd>':'<dd>'+esc(v)+'</dd>';
         return '<dt>'+esc(L(f[1],f[2]))+'</dt>'+vv}).join('')+'</dl>';
+    }
+    if(orgEdit!==id||!isAdmin){
       if(isAdmin&&db) h+='<button class="btn alt oed" type="button" data-oedit="'+id+'">'+esc(L('Edit details','تعديل البيانات'))+'</button>';
     }
     return h+'</div>';
   }
   function org(){
     var ppl=orgPeople(), sup=ppl.filter(function(p){return p.role==='Super'});
-    var all=CHAIN.map(function(c){return c.id}).concat(ppl.filter(function(p){return sup.some(function(x){return x.team===(ORGT[p.team]||p.team)})}).map(function(p){return p.id}));
+    var all=CHAIN.filter(function(c){return !EXEC[c.id]}).map(function(c){return c.id}).concat(ppl.filter(function(p){return sup.some(function(x){return x.team===(ORGT[p.team]||p.team)})}).map(function(p){return p.id}));
     var filled=all.filter(function(id){var x=oinfo(id);return x.hr&&x.email&&x.phone}).length;
     var h='<section class="panel"><header class="ohead"><div><h2>'+esc(L('Team structure','هيكل الفريق'))+'</h2><span class="sub">'+esc(L('Reporting line with HR ID, email and work phone','التسلسل الإداري مع الـ HR ID والإيميل ورقم الشغل'))+'</span></div>'+
       '<input id="oq" type="search" data-oq="1" dir="auto" placeholder="'+esc(L('Search name, HR ID, email or phone','دوّر بالاسم أو HR ID أو الإيميل أو الرقم'))+'" value="'+esc(orgQ)+'"></header>'+
